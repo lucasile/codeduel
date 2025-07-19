@@ -113,6 +113,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       console.log('🔄 Updated editor with new solution:', initialCode.substring(0, 50) + '...');
     }
   }, [initialCode]);
+  
+  // Reset edited lines when starting a new bug introduction phase
+  React.useEffect(() => {
+    if (gamePhase === 'bug_introduction' && isMyTurn) {
+      setEditedLines(new Set()); // Reset edited lines for new round
+      setOriginalCode(currentCode); // Update original code reference
+      console.log('🔄 Reset edited lines for new bug introduction round');
+    }
+  }, [gamePhase, isMyTurn]); // Remove currentCode from dependencies to prevent reset on every edit
 
   const handleEditorDidMount = (editor: any) => {
     editorRef.current = editor;
