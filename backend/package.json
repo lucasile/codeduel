@@ -1,0 +1,35 @@
+{
+  "name": "code-duel-backend",
+  "version": "1.0.0",
+  "description": "Backend server for Code Duel - 1v1 competitive coding game",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "axios": "^1.5.0",
+    "uuid": "^9.0.0",
+    "pg": "^8.11.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "jest": "^29.6.4",
+    "@types/jest": "^29.5.5"
+  },
+  "keywords": [
+    "game",
+    "coding",
+    "competitive",
+    "real-time"
+  ],
+  "author": "Code Duel Team",
+  "license": "MIT"
+}
