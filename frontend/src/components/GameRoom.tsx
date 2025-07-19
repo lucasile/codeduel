@@ -49,7 +49,7 @@ const WaitingScreen = styled.div`
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #57b43eff 0%, #216309ff 100%);
 `;
 
 const WaitingTitle = styled.h2`

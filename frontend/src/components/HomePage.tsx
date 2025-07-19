@@ -49,14 +49,14 @@ const Input = styled.input`
 
   &:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: #216309ff;
   }
 `;
 
 const Button = styled.button`
   width: 100%;
   padding: 1rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1D976C 0%, #93F9B9 100%);
   color: white;
   border: none;
   border-radius: 10px;
@@ -144,7 +144,7 @@ const HomePage: React.FC = () => {
         {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
       </ConnectionStatus>
       
-      <Title>⚔️ Code Duel</Title>
+      <Title>Bug Battle</Title>
       <Subtitle>
         Challenge your friends in the ultimate 1v1 coding battle! 
         Introduce bugs, hunt them down, and prove your debugging skills.
@@ -163,7 +163,7 @@ const HomePage: React.FC = () => {
           onClick={handleCreateGame}
           disabled={!playerName.trim() || !isConnected || isJoining}
         >
-          {isJoining ? '🎮 Creating Game...' : '🎮 Create New Game'}
+          {isJoining ? 'Creating Game...' : 'Create New Game'}
         </Button>
 
         <div style={{ textAlign: 'center', margin: '1rem 0', color: '#666' }}>
@@ -181,7 +181,7 @@ const HomePage: React.FC = () => {
           onClick={handleJoinGame}
           disabled={!playerName.trim() || !gameId.trim() || !isConnected || isJoining}
         >
-          {isJoining ? '🚀 Joining Game...' : '🚀 Join Game'}
+          {isJoining ? 'Joining Game...' : 'Join Game'}
         </SecondaryButton>
       </GameCard>
     </HomeContainer>
