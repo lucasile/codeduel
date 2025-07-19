@@ -1,5 +1,8 @@
 const { v4: uuidv4 } = require('uuid');
 
+// Note: Using built-in fetch (Node.js 18+)
+// If using older Node.js version, you may need to polyfill fetch
+
 // Generate 4-digit alphanumeric game code
 function generateGameCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -84,26 +87,134 @@ const sampleTestCases = {
   3: [{ input: ["()"], expected: true }, { input: ["()[]{}"], expected: true }, { input: ["(]"], expected: false }]
 };
 
-// Function to fetch and send a random problem to the game
-function fetchAndSendProblem(gameId, io) {
+// Function to fetch and send a random problem to the game (with premium problem retry)
+async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
   const game = games.get(gameId);
   if (!game) return;
   
-  // Get random problem from sample data
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🎲 Fetching random LeetCode problem for game ${gameId}... (Attempt ${attempt}/${maxRetries})`);
+      
+      // Step 1: Get random problem ID
+      const randomResponse = await fetch('https://leetcode-api-pied.vercel.app/random');
+      if (!randomResponse.ok) {
+        throw new Error(`LeetCode API random error: ${randomResponse.status}`);
+      }
+      
+      const randomProblem = await randomResponse.json();
+      const problemId = randomProblem.frontend_id; // Use frontend_id for LeetCode API
+      
+      console.log(`🎯 Got random problem - Internal ID: ${randomProblem.id}, LeetCode ID: ${problemId} - "${randomProblem.title}"`);
+      
+      // Check if it's a premium problem from the random response
+      if (randomProblem.isPaidOnly) {
+        console.log(`💰 Skipping premium problem: "${randomProblem.title}" - trying another...`);
+        continue; // Try again with a different problem
+      }
+      
+      // Step 2: Get full problem details using the frontend_id (LeetCode ID)
+      console.log(`🔍 Fetching problem details for LeetCode ID: ${problemId}`);
+      const problemResponse = await fetch(`https://leetcode-api-pied.vercel.app/problem/${problemId}`);
+      console.log(`🔍 Problem API response status: ${problemResponse.status}`);
+      
+      if (!problemResponse.ok) {
+        console.log(`❌ Problem API failed with status: ${problemResponse.status}`);
+        throw new Error(`LeetCode API problem error: ${problemResponse.status}`);
+      }
+      
+      console.log(`🔍 Parsing problem response JSON...`);
+      const problemData = await problemResponse.json();
+      console.log(`🔍 Problem data keys:`, Object.keys(problemData));
+      
+      // The API response might have different structure, let's handle both cases
+      const leetcodeProblem = problemData.question || problemData;
+      
+      if (!leetcodeProblem) {
+        throw new Error('No problem data found in API response');
+      }
+      
+      // Check if content is null/empty (another indicator of premium problems)
+      if (!leetcodeProblem.content || leetcodeProblem.content.trim() === '') {
+        console.log(`💰 Problem has no content (likely premium): "${randomProblem.title}" - trying another...`);
+        continue; // Try again with a different problem
+      }
+    
+      // Transform LeetCode API response to our format
+      const problem = {
+        id: leetcodeProblem.questionId || leetcodeProblem.id,
+        frontend_id: leetcodeProblem.questionFrontendId || leetcodeProblem.frontend_id,
+        title: leetcodeProblem.title,
+        title_slug: leetcodeProblem.titleSlug || leetcodeProblem.title_slug,
+        difficulty: leetcodeProblem.difficulty,
+        description: leetcodeProblem.content || leetcodeProblem.description,
+        examples: [], // Will be parsed from content if needed
+        constraints: [] // Will be parsed from content if needed
+      };
+      
+      // For now, use placeholder solution as requested
+      const solution = "# Sample solution\n# TODO: Integrate with Vellum API for real solutions\ndef solution():\n    pass";
+      
+      // Generate basic test cases (placeholder for now)
+      const testCases = [
+        { input: "example input", expectedOutput: "example output" },
+        { input: "test case 2", expectedOutput: "expected result 2" }
+      ];
+      
+      console.log(`✅ Fetched LeetCode problem: "${problem.title}" (${problem.difficulty})`);
+      
+      // Send problem to all players
+      io.to(gameId).emit('problem_ready', {
+        problem,
+        testCases
+      });
+      
+      // Send solution ONLY to the bug introducer
+      if (game.currentBugIntroducer) {
+        const bugIntroducerSocket = [...io.sockets.sockets.values()]
+          .find(socket => socket.id === game.currentBugIntroducer);
+        
+        if (bugIntroducerSocket) {
+          bugIntroducerSocket.emit('solution_ready', {
+            solution
+          });
+          console.log(`✅ Sample solution sent to bug introducer only`);
+        }
+      }
+      
+      // Success! Exit the retry loop
+      return;
+      
+    } catch (error) {
+      console.error(`❌ Attempt ${attempt} failed:`, error.message);
+      
+      // If this was the last attempt, fall back to sample data
+      if (attempt === maxRetries) {
+        console.log(`🔄 All ${maxRetries} attempts failed. Falling back to sample problem data...`);
+        break; // Exit retry loop and use fallback
+      }
+      
+      // Otherwise, continue to next attempt
+      console.log(`🔄 Retrying... (${attempt}/${maxRetries})`);
+    }
+  }
+  
+  // Fallback to sample data if all retries failed
+  console.log(`🔄 Falling back to sample problem data...`);
   const randomIndex = Math.floor(Math.random() * sampleProblems.length);
   const problem = sampleProblems[randomIndex];
   const solution = sampleSolutions[problem.id].python;
   const testCases = sampleTestCases[problem.id];
   
-  console.log(`Sending fresh problem "${problem.title}" to game ${gameId}`);
+  console.log(`🔄 Using fallback problem: "${problem.title}"`);
   
-  // Send problem to all players
+  // Send fallback problem to all players
   io.to(gameId).emit('problem_ready', {
     problem,
     testCases
   });
   
-  // Send solution ONLY to the bug introducer
+  // Send fallback solution ONLY to the bug introducer
   if (game.currentBugIntroducer) {
     const bugIntroducerSocket = [...io.sockets.sockets.values()]
       .find(socket => socket.id === game.currentBugIntroducer);
@@ -112,7 +223,7 @@ function fetchAndSendProblem(gameId, io) {
       bugIntroducerSocket.emit('solution_ready', {
         solution
       });
-      console.log(`✅ Solution sent to bug introducer only`);
+      console.log(`✅ Fallback solution sent to bug introducer only`);
     }
   }
 }
