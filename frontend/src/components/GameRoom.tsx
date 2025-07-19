@@ -49,7 +49,78 @@ const WaitingScreen = styled.div`
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background: linear-gradient(135deg, #57b43eff 0%, #216309ff 100%);
+  background: linear-gradient(135deg, #408c2dff 0%, #164406ff 100%);
+`;
+
+const WinnerScreen = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+  animation: celebration 2s ease-in-out;
+
+  @keyframes celebration {
+    0% { transform: scale(0.8); opacity: 0; }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+`;
+
+const WinnerTitle = styled.h1`
+  color: white;
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  animation: pulse 2s infinite;
+
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+`;
+
+const WinnerSubtitle = styled.h2`
+  color: white;
+  font-size: 1.5rem;
+  margin-bottom: 2rem;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+`;
+
+const FinalScoreDisplay = styled.div`
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2rem;
+  border-radius: 15px;
+  color: white;
+  font-size: 1.3rem;
+  margin-bottom: 3rem;
+  text-align: center;
+  min-width: 300px;
+`;
+
+const PlayAgainButton = styled.button`
+  padding: 1rem 3rem;
+  background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(0, 184, 148, 0.4);
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 184, 148, 0.6);
+    background: linear-gradient(135deg, #00a085 0%, #00b894 100%);
+  }
+
+  &:active {
+    transform: translateY(0px);
+  }
 `;
 
 const WaitingTitle = styled.h2`
@@ -401,7 +472,7 @@ const GameRoom: React.FC = () => {
   if (!isGameStarted || !gameState) {
     return (
       <WaitingScreen>
-        <WaitingTitle>⏳ Waiting for players...</WaitingTitle>
+        <WaitingTitle>⏳Waiting for players...</WaitingTitle>
         <GameIdDisplay>
           Game ID: <strong>{gameId}</strong>
         </GameIdDisplay>
