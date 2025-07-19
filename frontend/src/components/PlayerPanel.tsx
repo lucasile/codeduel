@@ -208,11 +208,11 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
       })}
 
       <ScoreSection>
-        <ScoreTitle>📊 Scoreboard</ScoreTitle>
+        <ScoreTitle>Scoring</ScoreTitle>
         <div style={{ color: '#d1d5db', fontSize: '0.9rem' }}>
           <div>• Bug Hunter: +100 pts for successful fix</div>
           <div>• Bug Introducer: +50 pts if bug not found</div>
-          <div>• Speed Bonus: Extra points for quick fixes</div>
+          {/* <div>• Speed Bonus: Extra points for quick fixes</div> */}
         </div>
       </ScoreSection>
     </PanelContainer>

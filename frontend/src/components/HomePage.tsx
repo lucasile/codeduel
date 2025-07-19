@@ -13,12 +13,13 @@ const HomeContainer = styled.div`
 `;
 
 const Title = styled.h1`
-  font-size: 4rem;
+  font-family: 'Chewy', cursive;
+  font-size: 7rem;
   font-weight: bold;
-  color: white;
+  color: #e0f6d5ff;
   text-align: center;
   margin-bottom: 1rem;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 `;
 
 const Subtitle = styled.p`

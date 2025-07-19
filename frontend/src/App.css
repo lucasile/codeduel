@@ -42,6 +42,8 @@ body {
   background: #9ca3af;
 }
 
+@import url('https://fonts.googleapis.com/css2?family=Chewy&display=swap');
+
 /* Animations */
 @keyframes fadeIn {
   from {
