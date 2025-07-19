@@ -200,14 +200,17 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }
   };
 
-  const getDisplayCode = () => {
-    if (gamePhase === 'debugging' && !isMyTurn) {
-      return initialCode; // Bug introducer sees original code during debugging
+  const getEditorCode = () => {
+    if (gamePhase === 'debugging' && buggyCode) {
+      return buggyCode; // Show buggy code during debugging (debugger never sees solution)
     }
-    if (gamePhase === 'debugging' && isMyTurn && buggyCode) {
-      return buggyCode; // Debugger sees buggy code
+    if (gamePhase === 'bug_introduction' && isMyTurn && currentCode) {
+      return currentCode; // Show solution to bug introducer only
     }
-    return currentCode;
+    if (gamePhase === 'bug_introduction' && !isMyTurn) {
+      return '// Waiting for bug introducer to load the problem solution...'; // Debugger waits
+    }
+    return currentCode || '// Loading...'; // Fallback
   };
 
   const isEditorReadOnly = () => {
@@ -244,10 +247,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         </TurnIndicator>
         
         <Editor
-          height="100%"
+          height="400px"
           defaultLanguage="python"
           theme="vs-dark"
-          value={getDisplayCode()}
+          value={getEditorCode()}
           onChange={handleCodeChange}
           onMount={handleEditorDidMount}
           options={{

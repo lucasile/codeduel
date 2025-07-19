@@ -89,25 +89,32 @@ function fetchAndSendProblem(gameId, io) {
   const game = games.get(gameId);
   if (!game) return;
   
-  // Get a random problem
+  // Get random problem from sample data
   const randomIndex = Math.floor(Math.random() * sampleProblems.length);
   const problem = sampleProblems[randomIndex];
   const solution = sampleSolutions[problem.id].python;
   const testCases = sampleTestCases[problem.id];
   
-  // Store in game state
-  game.currentProblem = problem;
-  game.currentSolution = solution;
-  game.testCases = testCases;
-  
   console.log(`Sending fresh problem "${problem.title}" to game ${gameId}`);
   
-  // Send to all players
+  // Send problem to all players
   io.to(gameId).emit('problem_ready', {
     problem,
-    solution,
-    testCases: testCases.length
+    testCases
   });
+  
+  // Send solution ONLY to the bug introducer
+  if (game.currentBugIntroducer) {
+    const bugIntroducerSocket = [...io.sockets.sockets.values()]
+      .find(socket => socket.id === game.currentBugIntroducer);
+    
+    if (bugIntroducerSocket) {
+      bugIntroducerSocket.emit('solution_ready', {
+        solution
+      });
+      console.log(`✅ Solution sent to bug introducer only`);
+    }
+  }
 }
 
 class GameSession {
@@ -479,6 +486,9 @@ function initializeSocket(io) {
             phase: game.currentPhase,
             timeLeft: game.timeLeft
           });
+          
+          // Fetch a fresh problem for the new round
+          fetchAndSendProblem(gameId, io);
         }, 3000); // 3 second break between rounds
       }
     });

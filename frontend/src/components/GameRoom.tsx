@@ -206,7 +206,22 @@ const GameRoom: React.FC = () => {
     });
 
     socket.on('problem_ready', (data) => {
+      console.log('🎲 Problem received:', data.problem.title);
       setCurrentProblem(data.problem);
+      // Note: Solution is NOT sent to all players anymore
+      
+      // Update game state with test cases if available
+      if (data.testCases) {
+        setGameState(prev => prev ? {
+          ...prev,
+          testCases: data.testCases
+        } : null);
+      }
+    });
+    
+    // NEW: Handle solution sent only to bug introducer
+    socket.on('solution_ready', (data) => {
+      console.log('✅ Solution received (bug introducer only):', data.solution.substring(0, 50) + '...');
       setCurrentSolution(data.solution);
     });
 
@@ -220,6 +235,15 @@ const GameRoom: React.FC = () => {
     });
 
     socket.on('bug_introduced', (data) => {
+      console.log('🐛 Bug introduced - debugger receives buggy code only');
+      setBuggyCode(data.buggyCode);
+      
+      // Clear solution for debugger (they should never see the original solution)
+      if (gameState?.currentPhase === 'debugging' && gameState.debugger === playerId) {
+        setCurrentSolution(''); // Debugger doesn't get the solution!
+        console.log('🚫 Debugger: Solution cleared, only buggy code visible');
+      }
+      
       setGameState(prev => prev ? {
         ...prev,
         currentPhase: data.phase,
@@ -274,7 +298,7 @@ const GameRoom: React.FC = () => {
       socket.off('player_joined');
       socket.off('game_started');
       socket.off('problem_ready');
-      socket.off('debugging_phase');
+      socket.off('solution_ready');
       socket.off('bug_introduced');
       socket.off('round_complete');
       socket.off('new_round');
@@ -396,10 +420,14 @@ const GameRoom: React.FC = () => {
         </CenterPanel>
 
         <RightPanel>
-          <PlayerPanel 
-            player={gameState.debugger}
-            isCurrentPlayer={gameState.currentPhase === 'debugging' && gameState.debugger.id === playerId}
-            timeLeft={gameState.timeLeft}
+          <PlayerPanel
+            players={gameState.players}
+            scores={gameState.scores}
+            powerUps={gameState.powerUps}
+            currentPlayerId={playerId}
+            bugIntroducer={gameState.bugIntroducer}
+            debuggerPlayer={gameState.debugger}
+            currentPhase={gameState.currentPhase}
           />
           
           {/* Power-ups Panel */}
