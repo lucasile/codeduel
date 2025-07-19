@@ -19,9 +19,6 @@ const PanelTitle = styled.h3`
 `;
 
 const ProblemCard = styled.div`
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid #10b981;
-  border-radius: 8px;
   padding: 1rem;
   margin-bottom: 1rem;
 `;
@@ -55,6 +52,37 @@ const ProblemDescription = styled.div`
   font-size: 0.9rem;
   line-height: 1.4;
   margin-bottom: 1rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  max-width: 100%;
+  
+  /* Style HTML elements within the description */
+  p {
+    margin: 0.5rem 0;
+  }
+  
+  code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+  }
+  
+  strong {
+    font-weight: 600;
+    color: #f3f4f6;
+  }
+  
+  ul, ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+  }
+  
+  li {
+    margin: 0.2rem 0;
+  }
 `;
 
 const ExampleSection = styled.div`
@@ -76,6 +104,13 @@ const ExampleCode = styled.pre`
   color: #d1d5db;
   overflow-x: auto;
   margin-bottom: 0.5rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
+  
+  /* Ensure long lines wrap instead of overflow */
+  word-break: break-all;
 `;
 
 const Button = styled.button`
@@ -216,9 +251,9 @@ const ProblemPanel: React.FC<ProblemPanelProps> = ({
           {currentProblem.difficulty}
         </DifficultyBadge>
         
-        <ProblemDescription>
-          {currentProblem.description}
-        </ProblemDescription>
+        <ProblemDescription 
+          dangerouslySetInnerHTML={{ __html: currentProblem.description }}
+        />
 
         {currentProblem.examples && currentProblem.examples.length > 0 && (
           <ExampleSection>
