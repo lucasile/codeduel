@@ -138,22 +138,37 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       
       // Track which lines have been edited (only during bug introduction phase)
       if (gamePhase === 'bug_introduction' && isMyTurn && originalCode) {
-        const originalLines = originalCode.split('\n');
-        const currentLines = value.split('\n');
-        const newEditedLines = new Set<number>();
-        
-        // Compare each line to find differences
-        const maxLines = Math.max(originalLines.length, currentLines.length);
-        for (let i = 0; i < maxLines; i++) {
-          const originalLine = originalLines[i] || '';
-          const currentLine = currentLines[i] || '';
-          if (originalLine !== currentLine) {
-            newEditedLines.add(i + 1); // Line numbers are 1-indexed
+        // Use setTimeout to debounce the line comparison to prevent race conditions
+        setTimeout(() => {
+          const originalLines = originalCode.split('\n');
+          const currentLines = value.split('\n');
+          const newEditedLines = new Set<number>();
+          
+          // Compare each line to find differences
+          const maxLines = Math.max(originalLines.length, currentLines.length);
+          for (let i = 0; i < maxLines; i++) {
+            const originalLine = (originalLines[i] || '').trim();
+            const currentLine = (currentLines[i] || '').trim();
+            // Only count as edited if there's a meaningful difference (not just whitespace)
+            if (originalLine !== currentLine && (originalLine.length > 0 || currentLine.length > 0)) {
+              newEditedLines.add(i + 1); // Line numbers are 1-indexed
+            }
           }
-        }
-        
-        setEditedLines(newEditedLines);
-        console.log('📝 Edited lines:', Array.from(newEditedLines));
+          
+          // Only update if the set actually changed to prevent unnecessary re-renders
+          setEditedLines(prevEditedLines => {
+            const prevArray = Array.from(prevEditedLines).sort();
+            const newArray = Array.from(newEditedLines).sort();
+            const hasChanged = prevArray.length !== newArray.length || 
+                             prevArray.some((line, index) => line !== newArray[index]);
+            
+            if (hasChanged) {
+              console.log('📝 Edited lines updated:', newArray);
+              return newEditedLines;
+            }
+            return prevEditedLines;
+          });
+        }, 50); // 50ms debounce to handle rapid changes
       }
     }
   };
