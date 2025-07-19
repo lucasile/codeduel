@@ -16,7 +16,7 @@ const Title = styled.h1`
   font-family: 'Chewy', cursive;
   font-size: 7rem;
   font-weight: bold;
-  color: #e0f6d5ff;
+  color: white;
   text-align: center;
   margin-bottom: 1rem;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
@@ -31,7 +31,7 @@ const Subtitle = styled.p`
 `;
 
 const GameCard = styled.div`
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.7);
   border-radius: 20px;
   padding: 2rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
@@ -40,6 +40,7 @@ const GameCard = styled.div`
 `;
 
 const Input = styled.input`
+  background: rgba(255, 255, 255, 0.83);
   width: 100%;
   padding: 1rem;
   border: 2px solid #e1e5e9;
