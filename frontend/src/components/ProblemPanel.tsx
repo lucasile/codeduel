@@ -161,7 +161,9 @@ const ProblemPanel: React.FC<ProblemPanelProps> = ({
     setError(null);
     
     try {
+      console.log('🎲 Fetching random problem...');
       const response = await axios.get('/api/game/problem/random');
+      console.log('🎲 Problem response:', response.data);
       const { problem: newProblem } = response.data;
       
       // Fetch solution and test cases

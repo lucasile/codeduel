@@ -14,12 +14,108 @@ function generateGameCode() {
 const games = new Map();
 const players = new Map();
 
+// Import sample data from routes
+const sampleProblems = [
+  {
+    id: 1,
+    title: "Two Sum",
+    difficulty: "Easy",
+    description: "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+    examples: [{ input: "nums = [2,7,11,15], target = 9", output: "[0,1]", explanation: "Because nums[0] + nums[1] == 9, we return [0, 1]." }],
+    constraints: ["2 <= nums.length <= 10^4", "-10^9 <= nums[i] <= 10^9", "-10^9 <= target <= 10^9", "Only one valid answer exists."]
+  },
+  {
+    id: 2,
+    title: "Reverse Integer",
+    difficulty: "Medium",
+    description: "Given a signed 32-bit integer x, return x with its digits reversed. If reversing x causes the value to go outside the signed 32-bit integer range [-2^31, 2^31 - 1], then return 0.",
+    examples: [{ input: "x = 123", output: "321" }, { input: "x = -123", output: "-321" }],
+    constraints: ["-2^31 <= x <= 2^31 - 1"]
+  },
+  {
+    id: 3,
+    title: "Valid Parentheses",
+    difficulty: "Easy",
+    description: "Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.",
+    examples: [{ input: 's = "()"', output: "true" }, { input: 's = "()[]{}"', output: "true" }, { input: 's = "(]"', output: "false" }],
+    constraints: ["1 <= s.length <= 10^4", "s consists of parentheses only '()[]{}'."]
+  }
+];
+
+const sampleSolutions = {
+  1: {
+    python: `def twoSum(nums, target):
+    num_map = {}
+    for i, num in enumerate(nums):
+        complement = target - num
+        if complement in num_map:
+            return [num_map[complement], i]
+        num_map[num] = i
+    return []`
+  },
+  2: {
+    python: `def reverse(x):
+    sign = -1 if x < 0 else 1
+    x = abs(x)
+    result = 0
+    while x:
+        result = result * 10 + x % 10
+        x //= 10
+    result *= sign
+    return result if -2**31 <= result <= 2**31 - 1 else 0`
+  },
+  3: {
+    python: `def isValid(s):
+    stack = []
+    mapping = {')': '(', '}': '{', ']': '['}
+    for char in s:
+        if char in mapping:
+            if not stack or stack.pop() != mapping[char]:
+                return False
+        else:
+            stack.append(char)
+    return not stack`
+  }
+};
+
+const sampleTestCases = {
+  1: [{ input: [[2, 7, 11, 15], 9], expected: [0, 1] }, { input: [[3, 2, 4], 6], expected: [1, 2] }],
+  2: [{ input: [123], expected: 321 }, { input: [-123], expected: -321 }, { input: [120], expected: 21 }],
+  3: [{ input: ["()"], expected: true }, { input: ["()[]{}"], expected: true }, { input: ["(]"], expected: false }]
+};
+
+// Function to fetch and send a random problem to the game
+function fetchAndSendProblem(gameId, io) {
+  const game = games.get(gameId);
+  if (!game) return;
+  
+  // Get a random problem
+  const randomIndex = Math.floor(Math.random() * sampleProblems.length);
+  const problem = sampleProblems[randomIndex];
+  const solution = sampleSolutions[problem.id].python;
+  const testCases = sampleTestCases[problem.id];
+  
+  // Store in game state
+  game.currentProblem = problem;
+  game.currentSolution = solution;
+  game.testCases = testCases;
+  
+  console.log(`Sending fresh problem "${problem.title}" to game ${gameId}`);
+  
+  // Send to all players
+  io.to(gameId).emit('problem_ready', {
+    problem,
+    solution,
+    testCases: testCases.length
+  });
+}
+
 class GameSession {
   constructor(id) {
     this.id = id;
     this.players = [];
     this.currentRound = 0;
-    this.maxRounds = 7;
+    this.maxRounds = 3;
     this.currentPhase = 'waiting'; // waiting, bug_introduction, debugging, validation, finished
     this.currentBugIntroducer = null;
     this.currentDebugger = null;
@@ -35,6 +131,87 @@ class GameSession {
     this.buggyCode = '';
     this.testCases = [];
     this.createdAt = new Date();
+    this.io = null; // Will be set when timer starts
+  }
+  
+  startTimer(io) {
+    this.io = io;
+    this.clearTimer(); // Clear any existing timer
+    
+    this.timer = setInterval(() => {
+      this.timeLeft--;
+      
+      // Broadcast time update to all players in the game
+      io.to(this.id).emit('timer_update', {
+        timeLeft: this.timeLeft,
+        phase: this.currentPhase
+      });
+      
+      // Handle time up
+      if (this.timeLeft <= 0) {
+        this.handleTimeUp(io);
+      }
+    }, 1000);
+  }
+  
+  clearTimer() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+  
+  handleTimeUp(io) {
+    this.clearTimer();
+    console.log(`Time up for game ${this.id} in phase ${this.currentPhase}`);
+    
+    if (this.currentPhase === 'debugging') {
+      // Debugger failed to find the bug in time
+      // Award points to bug introducer
+      const introducerIndex = this.players.findIndex(p => p.id === this.currentBugIntroducer);
+      const playerKey = introducerIndex === 0 ? 'player1' : 'player2';
+      this.scores[playerKey] += 50;
+      
+      io.to(this.id).emit('round_complete', {
+        isCorrect: false,
+        timeUp: true,
+        scores: this.scores,
+        currentRound: this.currentRound,
+        maxRounds: this.maxRounds
+      });
+      
+      // Check if game is over or start next round
+      this.checkGameEnd(io);
+    }
+  }
+  
+  checkGameEnd(io) {
+    if (this.currentRound >= this.maxRounds) {
+      const winner = this.scores.player1 > this.scores.player2 ? 
+        this.players[0] : this.players[1];
+      
+      io.to(this.id).emit('game_over', {
+        winner,
+        finalScores: this.scores
+      });
+      
+      games.delete(this.id);
+    } else {
+      // Start next round
+      setTimeout(() => {
+        this.startRound();
+        io.to(this.id).emit('new_round', {
+          currentRound: this.currentRound,
+          bugIntroducer: this.currentBugIntroducer,
+          debugger: this.currentDebugger,
+          phase: this.currentPhase,
+          timeLeft: this.timeLeft
+        });
+        
+        // Fetch a fresh problem for the new round
+        fetchAndSendProblem(this.id, io);
+      }, 3000); // 3 second break between rounds
+    }
   }
 
   addPlayer(playerId, playerName) {
@@ -62,6 +239,12 @@ class GameSession {
     const introducerIndex = (this.currentRound - 1) % 2;
     this.currentBugIntroducer = this.players[introducerIndex].id;
     this.currentDebugger = this.players[1 - introducerIndex].id;
+    
+    // Clear previous problem data for fresh start
+    this.currentProblem = null;
+    this.currentSolution = '';
+    this.buggyCode = '';
+    this.testCases = [];
   }
 
   switchPhase(newPhase) {
@@ -129,10 +312,50 @@ function initializeSocket(io) {
             debugger: game.currentDebugger,
             timeLeft: game.timeLeft
           });
+          
+          // Auto-fetch a fresh problem for the new round
+          fetchAndSendProblem(gameId, io);
         }
       } else {
         console.log(`Failed to add player ${playerName} to game ${gameId} - game is full`);
         socket.emit('join_error', { message: 'Game is full' });
+      }
+    });
+
+    // Handle request for current game state
+    socket.on('get_game_state', ({ gameId }) => {
+      const game = games.get(gameId);
+      if (!game) {
+        socket.emit('join_error', { message: 'Game not found' });
+        return;
+      }
+
+      const playerData = players.get(socket.id);
+      if (!playerData) {
+        console.log(`Player ${socket.id} not found in players map`);
+        return;
+      }
+
+      console.log(`Sending current game state to ${playerData.playerName} for game ${gameId}`);
+      
+      // Send game_joined event to initialize the frontend state
+      socket.emit('game_joined', {
+        gameId,
+        playerId: socket.id,
+        playerName: playerData.playerName,
+        players: game.players
+      });
+
+      // If game is already started, send game_started event
+      if (game.isFull() && game.currentRound > 0) {
+        socket.emit('game_started', {
+          currentRound: game.currentRound,
+          maxRounds: game.maxRounds,
+          currentPhase: game.currentPhase,
+          bugIntroducer: game.currentBugIntroducer,
+          debugger: game.currentDebugger,
+          timeLeft: game.timeLeft
+        });
       }
     });
 
@@ -153,23 +376,50 @@ function initializeSocket(io) {
     });
 
     // Handle bug introduction
-    socket.on('introduce_bug', ({ gameId, buggyCode, lineNumber }) => {
+    socket.on('introduce_bug', (data) => {
+      const { gameId, buggyCode, lineNumber, editedLines } = data;
       const game = games.get(gameId);
-      if (!game || game.currentBugIntroducer !== socket.id) return;
-
+      
+      if (!game || game.currentPhase !== 'bug_introduction') {
+        socket.emit('error', { message: 'Cannot introduce bug at this time' });
+        return;
+      }
+      
+      // Verify it's the bug introducer's turn
+      if (game.currentBugIntroducer !== socket.id) {
+        socket.emit('error', { message: 'Not your turn to introduce bugs' });
+        return;
+      }
+      
+      // Validate line edit constraints (backend validation)
+      if (!editedLines || editedLines.length === 0) {
+        socket.emit('error', { message: 'You must edit at least one line to introduce a bug!' });
+        return;
+      }
+      
+      if (editedLines.length > 2) {
+        socket.emit('error', { message: 'You can only edit up to 2 lines at a time!' });
+        return;
+      }
+      
+      // Store the buggy code and start debugging phase
       game.buggyCode = buggyCode;
-      game.switchPhase('debugging');
-
-      // Send buggy code to debugger only
-      socket.to(gameId).emit('debugging_phase', {
+      game.bugLine = lineNumber;
+      game.editedLines = editedLines;
+      game.currentPhase = 'debugging';
+      game.timeLeft = 180; // 3 minutes for debugging
+      game.startTimer(io);
+      
+      console.log(`🐛 Bug introduced in game ${gameId} on ${editedLines.length} line(s):`, editedLines);
+      
+      // Notify all players
+      io.to(gameId).emit('bug_introduced', {
         buggyCode,
+        lineNumber,
+        editedLines,
+        phase: 'debugging',
         timeLeft: game.timeLeft,
         debugger: game.currentDebugger
-      });
-
-      socket.emit('bug_introduced', {
-        phase: 'debugging',
-        timeLeft: game.timeLeft
       });
     });
 
@@ -178,8 +428,12 @@ function initializeSocket(io) {
       const game = games.get(gameId);
       if (!game || game.currentDebugger !== socket.id) return;
 
+      // Stop the timer when fix is submitted
+      game.clearTimer();
+      console.log(`Timer stopped for game ${gameId} - fix submitted`);
+
       // In MVP, we'll do basic validation
-      // Later this will run against test cases via Judge0
+      // Later this will use Judge0 API for actual code execution
       const isCorrect = fixedCode.length > 0; // Simplified validation
 
       if (isCorrect) {

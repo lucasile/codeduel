@@ -84,7 +84,8 @@ interface CodeEditorProps {
   buggyCode: string;
   gamePhase: string;
   isMyTurn: boolean;
-  onIntroduceBug: (buggyCode: string, lineNumber: number) => void;
+  lineCorruptionActive: boolean;
+  onIntroduceBug: (buggyCode: string, lineNumber: number, editedLines: number[]) => void;
   onSubmitFix: (fixedCode: string, foundBugLine: number) => void;
 }
 
@@ -93,12 +94,25 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   buggyCode,
   gamePhase,
   isMyTurn,
+  lineCorruptionActive,
   onIntroduceBug,
   onSubmitFix
 }) => {
   const [currentCode, setCurrentCode] = useState(initialCode);
   const [selectedLine, setSelectedLine] = useState<number>(1);
+  const [editedLines, setEditedLines] = useState<Set<number>>(new Set());
+  const [originalCode, setOriginalCode] = useState(initialCode);
   const editorRef = useRef<any>(null);
+  
+  // Update currentCode when initialCode changes (new problem loaded)
+  React.useEffect(() => {
+    if (initialCode && initialCode !== currentCode) {
+      setCurrentCode(initialCode);
+      setOriginalCode(initialCode);
+      setEditedLines(new Set()); // Reset edited lines for new problem
+      console.log('🔄 Updated editor with new solution:', initialCode.substring(0, 50) + '...');
+    }
+  }, [initialCode]);
 
   const handleEditorDidMount = (editor: any) => {
     editorRef.current = editor;
@@ -112,15 +126,59 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const handleCodeChange = (value: string | undefined) => {
     if (value !== undefined) {
       setCurrentCode(value);
+      
+      // Track which lines have been edited (only during bug introduction phase)
+      if (gamePhase === 'bug_introduction' && isMyTurn && originalCode) {
+        const originalLines = originalCode.split('\n');
+        const currentLines = value.split('\n');
+        const newEditedLines = new Set<number>();
+        
+        // Compare each line to find differences
+        const maxLines = Math.max(originalLines.length, currentLines.length);
+        for (let i = 0; i < maxLines; i++) {
+          const originalLine = originalLines[i] || '';
+          const currentLine = currentLines[i] || '';
+          if (originalLine !== currentLine) {
+            newEditedLines.add(i + 1); // Line numbers are 1-indexed
+          }
+        }
+        
+        setEditedLines(newEditedLines);
+        console.log('📝 Edited lines:', Array.from(newEditedLines));
+      }
     }
   };
 
   const handleIntroduceBug = () => {
     if (!isMyTurn || gamePhase !== 'bug_introduction') return;
     
-    // In a real implementation, you might want to validate the bug introduction
-    // For MVP, we'll just submit the current code and selected line
-    onIntroduceBug(currentCode, selectedLine);
+    // Validate line edit constraints
+    const maxAllowedLines = lineCorruptionActive ? 2 : 1;
+    const editedLinesArray = Array.from(editedLines);
+    
+    if (editedLinesArray.length === 0) {
+      alert('⚠️ You must edit at least one line to introduce a bug!');
+      return;
+    }
+    
+    if (editedLinesArray.length > maxAllowedLines) {
+      const powerUpText = lineCorruptionActive ? '' : ' Use the Line Corruption power-up to edit 2 lines.';
+      alert(`⚠️ You can only edit ${maxAllowedLines} line(s) at a time.${powerUpText}`);
+      return;
+    }
+    
+    // Check if any edited line is actually empty (just whitespace)
+    const currentLines = currentCode.split('\n');
+    for (const lineNum of editedLinesArray) {
+      const line = currentLines[lineNum - 1];
+      if (!line || line.trim().length === 0) {
+        alert('⚠️ Edited lines cannot be empty or just whitespace!');
+        return;
+      }
+    }
+    
+    console.log(`🐛 Introducing bug on ${editedLinesArray.length} line(s):`, editedLinesArray);
+    onIntroduceBug(currentCode, selectedLine, editedLinesArray);
   };
 
   const handleSubmitFix = () => {
@@ -168,7 +226,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         <div>
           {gamePhase === 'bug_introduction' && isMyTurn && (
             <DangerButton onClick={handleIntroduceBug}>
-              🐛 Introduce Bug (Line {selectedLine})
+              🐛 Introduce Bug ({editedLines.size}/{lineCorruptionActive ? 2 : 1} lines edited)
             </DangerButton>
           )}
           
