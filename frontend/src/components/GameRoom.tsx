@@ -172,8 +172,8 @@ const GameRoom: React.FC = () => {
         timeLeft: 180,
         scores: { player1: 0, player2: 0 },
         powerUps: {
-          player1: { lineCorruption: 3, timeFreeze: 2 },
-          player2: { lineCorruption: 3, timeFreeze: 2 }
+          player1: { lineCorruption: 1, timeFreeze: 1 },
+          player2: { lineCorruption: 1, timeFreeze: 1 }
         }
       };
       console.log('🔌 Setting initial gameState:', initialState);
@@ -288,6 +288,37 @@ const GameRoom: React.FC = () => {
       } : null);
     });
 
+    socket.on('powerup_used', (data) => {
+      console.log(`⚡ Power-up used: ${data.powerUpType} by ${data.playerId}`);
+      setGameState(prev => {
+        if (!prev) return null;
+        
+        // Update power-up counts and timer
+        const updatedState = {
+          ...prev,
+          timeLeft: data.timeLeft,
+          powerUps: { ...prev.powerUps }
+        };
+        
+        // Find which player used the power-up and update their count
+        const playerIndex = prev.players.findIndex(p => p.id === data.playerId);
+        const playerKey = playerIndex === 0 ? 'player1' : 'player2';
+        
+        if (playerKey && updatedState.powerUps[playerKey]) {
+          updatedState.powerUps[playerKey] = {
+            ...updatedState.powerUps[playerKey],
+            [data.powerUpType]: data.remainingUses
+          };
+        }
+        
+        return updatedState;
+      });
+      
+      if (data.powerUpType === 'timeFreeze') {
+        console.log('❄️ Time Freeze activated! +15 seconds added to timer');
+      }
+    });
+
     socket.on('player_disconnected', (data) => {
       // Handle player disconnection
       console.log('Player disconnected:', data.playerName);
@@ -304,6 +335,7 @@ const GameRoom: React.FC = () => {
       socket.off('new_round');
       socket.off('game_over');
       socket.off('timer_update');
+      socket.off('powerup_used');
       socket.off('player_disconnected');
     };
   }, [socket, isConnected, gameId]);
@@ -431,26 +463,91 @@ const GameRoom: React.FC = () => {
           />
           
           {/* Power-ups Panel */}
-          {gameState.currentPhase === 'bug_introduction' && isMyTurn(gameState.currentPhase) && (
+          {(gameState.currentPhase === 'bug_introduction' || gameState.currentPhase === 'debugging') && isMyTurn(gameState.currentPhase) && (
             <div style={{ marginTop: '20px', padding: '15px', border: '2px solid #ff6b6b', borderRadius: '8px', backgroundColor: '#ffe0e0' }}>
               <h4 style={{ margin: '0 0 10px 0', color: '#d63031' }}>⚡ Power-ups</h4>
-              <button 
-                onClick={() => setLineCorruptionActive(!lineCorruptionActive)}
-                style={{
-                  padding: '8px 12px',
-                  backgroundColor: lineCorruptionActive ? '#00b894' : '#fd79a8',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                {lineCorruptionActive ? '✅ Line Corruption Active' : '💥 Activate Line Corruption'}
-              </button>
-              <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#636e72' }}>
-                {lineCorruptionActive ? 'You can edit 2 lines!' : 'Edit 2 lines instead of 1 (3 uses)'}
-              </p>
+              
+              {/* Line Corruption - Bug Introducer Only */}
+              {gameState.currentPhase === 'bug_introduction' && (() => {
+                const playerIndex = gameState.players.findIndex(p => p.id === playerId);
+                const playerKey = playerIndex === 0 ? 'player1' : 'player2';
+                const lineCorruptionUses = gameState.powerUps[playerKey]?.lineCorruption || 0;
+                const canUseLineCorruption = lineCorruptionUses > 0 && !lineCorruptionActive;
+                
+                return (
+                  <div style={{ marginBottom: '10px' }}>
+                    <button 
+                      onClick={() => {
+                        if (canUseLineCorruption) {
+                          handleUsePowerUp('lineCorruption');
+                          setLineCorruptionActive(true);
+                        } else if (lineCorruptionActive) {
+                          setLineCorruptionActive(false);
+                        }
+                      }}
+                      disabled={lineCorruptionUses === 0 && !lineCorruptionActive}
+                      style={{
+                        padding: '8px 12px',
+                        backgroundColor: lineCorruptionActive ? '#00b894' : (canUseLineCorruption ? '#fd79a8' : '#95a5a6'),
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: (canUseLineCorruption || lineCorruptionActive) ? 'pointer' : 'not-allowed',
+                        fontSize: '14px',
+                        width: '100%',
+                        opacity: (canUseLineCorruption || lineCorruptionActive) ? 1 : 0.6
+                      }}
+                    >
+                      {lineCorruptionActive ? '✅ Line Corruption Active' : 
+                       (canUseLineCorruption ? '💥 Activate Line Corruption' : '💥 Line Corruption Used')}
+                    </button>
+                    <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#636e72' }}>
+                      {lineCorruptionActive ? 'You can edit 2 lines!' : 
+                       `Edit 2 lines instead of 1 (${lineCorruptionUses} use${lineCorruptionUses !== 1 ? 's' : ''} left this game)`}
+                    </p>
+                  </div>
+                );
+              })()}
+              
+              {/* Time Freeze - Both Phases */}
+              <div>
+                {(() => {
+                  const playerIndex = gameState.players.findIndex(p => p.id === playerId);
+                  const playerKey = playerIndex === 0 ? 'player1' : 'player2';
+                  const timeFreezeUses = gameState.powerUps[playerKey]?.timeFreeze || 0;
+                  const canUseTimeFreeze = timeFreezeUses > 0;
+                  
+                  return (
+                    <>
+                      <button 
+                        onClick={() => {
+                          if (canUseTimeFreeze) {
+                            handleUsePowerUp('timeFreeze');
+                            console.log('❄️ Time Freeze button clicked - calling backend');
+                          }
+                        }}
+                        disabled={!canUseTimeFreeze}
+                        style={{
+                          padding: '8px 12px',
+                          backgroundColor: canUseTimeFreeze ? '#74b9ff' : '#95a5a6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: canUseTimeFreeze ? 'pointer' : 'not-allowed',
+                          fontSize: '14px',
+                          width: '100%',
+                          opacity: canUseTimeFreeze ? 1 : 0.6
+                        }}
+                      >
+                        {canUseTimeFreeze ? '❄️ Use Time Freeze' : '❄️ Time Freeze Used'}
+                      </button>
+                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#636e72' }}>
+                        Pause timer for 15 seconds ({timeFreezeUses} use{timeFreezeUses !== 1 ? 's' : ''} left this game)
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           )}
         </RightPanel>

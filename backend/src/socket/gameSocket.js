@@ -130,8 +130,8 @@ class GameSession {
     this.timer = null;
     this.scores = { player1: 0, player2: 0 };
     this.powerUps = {
-      player1: { lineCorruption: 3, timeFreeze: 2 },
-      player2: { lineCorruption: 3, timeFreeze: 2 }
+      player1: { lineCorruption: 1, timeFreeze: 1 },
+      player2: { lineCorruption: 1, timeFreeze: 1 }
     };
     this.currentProblem = null;
     this.currentSolution = '';
@@ -246,6 +246,9 @@ class GameSession {
     const introducerIndex = (this.currentRound - 1) % 2;
     this.currentBugIntroducer = this.players[introducerIndex].id;
     this.currentDebugger = this.players[1 - introducerIndex].id;
+    
+    // Power-ups persist across rounds (1 use per game per player)
+    console.log(`⚡ Round ${this.currentRound} started - power-ups persist from previous rounds`);
     
     // Clear previous problem data for fresh start
     this.currentProblem = null;
