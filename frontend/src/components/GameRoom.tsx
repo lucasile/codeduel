@@ -115,29 +115,58 @@ const GameRoom: React.FC = () => {
   const [playerId, setPlayerId] = useState<string>('');
 
   useEffect(() => {
-    if (!socket || !isConnected || !gameId) return;
+    if (!socket || !isConnected || !gameId) {
+      console.log('🔌 Socket setup skipped:', { socket: !!socket, isConnected, gameId });
+      return;
+    }
+    
+    console.log('🔌 Setting up socket event listeners for gameId:', gameId);
 
     // Socket event listeners
     socket.on('game_joined', (data) => {
+      console.log('🔌 Frontend received game_joined event:', data);
       setPlayerId(data.playerId);
-      setGameState(prev => prev ? { ...prev, players: data.players } : null);
+      // Initialize gameState when joining
+      const initialState = {
+        gameId: data.gameId,
+        players: data.players,
+        currentRound: 0,
+        maxRounds: 7,
+        currentPhase: 'waiting' as const,
+        bugIntroducer: null,
+        debugger: null,
+        timeLeft: 180,
+        scores: { player1: 0, player2: 0 },
+        powerUps: {
+          player1: { lineCorruption: 3, timeFreeze: 2 },
+          player2: { lineCorruption: 3, timeFreeze: 2 }
+        }
+      };
+      console.log('🔌 Setting initial gameState:', initialState);
+      setGameState(initialState);
     });
 
     socket.on('player_joined', (data) => {
-      setGameState(prev => prev ? { ...prev, players: data.players } : null);
+      setGameState(prev => prev ? { ...prev, players: data.players } : prev);
     });
 
     socket.on('game_started', (data) => {
+      console.log('🎮 Frontend received game_started event:', data);
       setIsGameStarted(true);
-      setGameState(prev => prev ? {
-        ...prev,
-        currentRound: data.currentRound,
-        maxRounds: data.maxRounds,
-        currentPhase: data.currentPhase,
-        bugIntroducer: data.bugIntroducer,
-        debugger: data.debugger,
-        timeLeft: data.timeLeft
-      } : null);
+      setGameState(prev => {
+        console.log('🎮 Previous gameState:', prev);
+        const newState = prev ? {
+          ...prev,
+          currentRound: data.currentRound,
+          maxRounds: data.maxRounds,
+          currentPhase: data.currentPhase,
+          bugIntroducer: data.bugIntroducer,
+          debugger: data.debugger,
+          timeLeft: data.timeLeft
+        } : null;
+        console.log('🎮 New gameState:', newState);
+        return newState;
+      });
     });
 
     socket.on('problem_ready', (data) => {
