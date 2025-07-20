@@ -85,8 +85,10 @@ interface CodeEditorProps {
   gamePhase: string;
   isMyTurn: boolean;
   lineCorruptionActive: boolean;
+  bugIntroducerEditedLines?: number[]; // Lines edited by bug introducer (for highlighting)
+  maxEditableLines?: number; // Dynamic line limit for debugger
   onIntroduceBug: (buggyCode: string, lineNumber: number, editedLines: number[]) => void;
-  onSubmitFix: (fixedCode: string, foundBugLine: number) => void;
+  onSubmitFix: (fixedCode: string, foundBugLine: number, debuggerEditedLines?: number[]) => void;
 }
 
 const CodeEditor: React.FC<CodeEditorProps> = ({
@@ -95,6 +97,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   gamePhase,
   isMyTurn,
   lineCorruptionActive,
+  bugIntroducerEditedLines = [],
+  maxEditableLines,
   onIntroduceBug,
   onSubmitFix
 }) => {
@@ -127,9 +131,18 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     if (gamePhase === 'bug_introduction' && isMyTurn) {
       setEditedLines(new Set()); // Reset edited lines for new round
       setOriginalCode(currentCode); // Update original code reference
-      console.log('🔄 Reset edited lines for new bug introduction round');
+      console.log(`🔄 Reset edited lines for new bug introduction phase`);
     }
-  }, [gamePhase, isMyTurn]); // Remove currentCode from dependencies to prevent reset on every edit
+  }, [gamePhase, isMyTurn]); // Don't include currentCode to avoid constant resets
+  
+  // Reset edited lines when debugging phase starts (use buggy code as baseline)
+  React.useEffect(() => {
+    if (gamePhase === 'debugging' && isMyTurn && buggyCode) {
+      setEditedLines(new Set()); // Reset edited lines for debugging
+      setOriginalCode(buggyCode); // Use buggy code as baseline for debugging
+      console.log(`🔄 Reset edited lines for debugging phase, baseline set to buggy code`);
+    }
+  }, [gamePhase, isMyTurn, buggyCode]); // Reset when debugging starts with buggy code
 
   const handleEditorDidMount = (editor: any) => {
     editorRef.current = editor;
@@ -139,18 +152,22 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       setSelectedLine(e.position.lineNumber);
     });
   };
+  
+  // Note: Line highlighting removed to prevent giving clues to debugger
 
   const handleCodeChange = (value: string | undefined) => {
     if (value !== undefined) {
       setCurrentCode(value);
       
-      // Track which lines have been edited (only during bug introduction phase)
-      if (gamePhase === 'bug_introduction' && isMyTurn && originalCode) {
+      // Track which lines have been edited (bug introduction OR debugging phase)
+      if (((gamePhase === 'bug_introduction' && isMyTurn) || (gamePhase === 'debugging' && isMyTurn)) && originalCode) {
         // Use setTimeout to debounce the line comparison to prevent race conditions
         setTimeout(() => {
           const originalLines = originalCode.split('\n');
           const currentLines = value.split('\n');
           const newEditedLines = new Set<number>();
+          
+          console.log(`🔍 Line comparison - Phase: ${gamePhase}, Original lines: ${originalLines.length}, Current lines: ${currentLines.length}`);
           
           // Compare each line to find differences
           const maxLines = Math.max(originalLines.length, currentLines.length);
@@ -160,8 +177,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             // Only count as edited if there's a meaningful difference (not just whitespace)
             if (originalLine !== currentLine && (originalLine.length > 0 || currentLine.length > 0)) {
               newEditedLines.add(i + 1); // Line numbers are 1-indexed
+              console.log(`📝 Line ${i + 1} edited: "${originalLine}" -> "${currentLine}"`);
             }
           }
+          
+          console.log(`📊 Total edited lines detected: ${newEditedLines.size}`, Array.from(newEditedLines));
+          
+          // Note: Allow line count to update even if limit exceeded (for UI feedback)
+          // Submission will be blocked by disabled button instead
           
           // Only update if the set actually changed to prevent unnecessary re-renders
           setEditedLines(prevEditedLines => {
@@ -216,7 +239,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const handleSubmitFix = () => {
     if (!isMyTurn || gamePhase !== 'debugging') return;
     
-    onSubmitFix(currentCode, selectedLine);
+    // Send debugger's edited lines for backend validation
+    const debuggerEditedLinesArray = Array.from(editedLines);
+    onSubmitFix(currentCode, selectedLine, debuggerEditedLinesArray);
   };
 
   const getPhaseText = () => {
@@ -288,8 +313,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           )}
           
           {gamePhase === 'debugging' && isMyTurn && (
-            <ActionButton onClick={handleSubmitFix}>
-              🔧 Submit Fix (Found on Line {selectedLine})
+            <ActionButton 
+              onClick={handleSubmitFix}
+              disabled={editedLines.size !== 1}
+            >
+              🔧 Submit Fix ({editedLines.size}/1 lines edited)
             </ActionButton>
           )}
         </div>
