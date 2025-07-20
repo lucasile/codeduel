@@ -106,13 +106,21 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   
   // Update currentCode when initialCode changes (new problem loaded)
   React.useEffect(() => {
-    if (initialCode && initialCode !== currentCode) {
+    console.log('🔍 CodeEditor initialCode changed:', {
+      hasInitialCode: !!initialCode,
+      initialCodeLength: initialCode?.length || 0,
+      initialCodePreview: initialCode?.substring(0, 50) || 'empty',
+      currentCodeLength: currentCode?.length || 0,
+      areEqual: initialCode === currentCode
+    });
+    
+    if (initialCode && initialCode.trim() !== '' && initialCode !== currentCode) {
       setCurrentCode(initialCode);
       setOriginalCode(initialCode);
       setEditedLines(new Set()); // Reset edited lines for new problem
       console.log('🔄 Updated editor with new solution:', initialCode.substring(0, 50) + '...');
     }
-  }, [initialCode]);
+  }, [initialCode]); // Remove currentCode from dependencies to avoid infinite loops
   
   // Reset edited lines when starting a new bug introduction phase
   React.useEffect(() => {
@@ -225,16 +233,38 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   };
 
   const getEditorCode = () => {
-    if (gamePhase === 'debugging' && buggyCode) {
-      return buggyCode; // Show buggy code during debugging (debugger never sees solution)
-    }
-    if (gamePhase === 'bug_introduction' && isMyTurn && currentCode) {
-      return currentCode; // Show solution to bug introducer only
-    }
-    if (gamePhase === 'bug_introduction' && !isMyTurn) {
-      return '// Waiting for bug introducer to load the problem solution...'; // Debugger waits
-    }
-    return currentCode || '// Loading...'; // Fallback
+    const result = (() => {
+      if (gamePhase === 'debugging' && buggyCode) {
+        return buggyCode; // Show buggy code during debugging (debugger never sees solution)
+      }
+      if (gamePhase === 'bug_introduction' && isMyTurn && currentCode) {
+        return currentCode; // Show solution to bug introducer only
+      }
+      if (gamePhase === 'bug_introduction' && !isMyTurn) {
+        return '// Waiting for bug introducer to load the problem solution...'; // Debugger waits
+      }
+      return currentCode || '// Loading...'; // Fallback
+    })();
+    
+    console.log('🔍 getEditorCode called:', {
+      gamePhase,
+      isMyTurn,
+      hasCurrentCode: !!currentCode,
+      currentCodeLength: currentCode?.length || 0,
+      hasInitialCode: !!initialCode,
+      initialCodeLength: initialCode?.length || 0,
+      hasBuggyCode: !!buggyCode,
+      resultPreview: result.substring(0, 50),
+      resultLength: result.length,
+      whichBranch: (() => {
+        if (gamePhase === 'debugging' && buggyCode) return 'debugging-buggy';
+        if (gamePhase === 'bug_introduction' && isMyTurn && currentCode) return 'bug_introduction-my_turn-has_code';
+        if (gamePhase === 'bug_introduction' && !isMyTurn) return 'bug_introduction-not_my_turn';
+        return 'fallback';
+      })()
+    });
+    
+    return result;
   };
 
   const isEditorReadOnly = () => {

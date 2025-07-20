@@ -1,0 +1,40 @@
+.end-game-screen {
+  background: #222;
+  color: #fff;
+  padding: 2em;
+  border-radius: 10px;
+  text-align: center;
+  width: 350px;
+  margin: 2em auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+.scores-list {
+  list-style: none;
+  padding: 0;
+  margin: 1em 0;
+}
+.scores-list li {
+  font-size: 1.1em;
+  margin: 0.5em 0;
+}
+.scores-list .winner {
+  font-weight: bold;
+  color: #ffd700;
+}
+.winner-text {
+  margin: 1em 0;
+  font-size: 1.2em;
+}
+.play-again-btn {
+  background: #ffd700;
+  color: #222;
+  border: none;
+  padding: 0.7em 1.5em;
+  border-radius: 5px;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.play-again-btn:hover {
+  background: #ffb700;
+}

@@ -185,6 +185,17 @@ const GameRoom: React.FC = () => {
   const [isGameStarted, setIsGameStarted] = useState(false);
   const [lineCorruptionActive, setLineCorruptionActive] = useState(false);
   const [playerId, setPlayerId] = useState<string>('');
+  const [isRoundLoading, setIsRoundLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+
+  // Debug: Track currentSolution changes
+  useEffect(() => {
+    console.log('🔍 currentSolution state changed:', {
+      length: currentSolution.length,
+      preview: currentSolution.substring(0, 100) + (currentSolution.length > 100 ? '...' : ''),
+      isEmpty: currentSolution === ''
+    });
+  }, [currentSolution]);
 
   // Function to fetch random problem for the game
   const fetchRandomProblemForGame = async () => {
@@ -276,10 +287,17 @@ const GameRoom: React.FC = () => {
       // Note: Backend now auto-sends problems, no need to fetch here
     });
 
-    socket.on('problem_ready', (data) => {
-      console.log('🎲 Problem received:', data.problem.title);
+    socket.on('problem_loaded', (data) => {
+      console.log('🎲 Problem received:', {
+        title: data.problem?.title || 'No title',
+        hasDescription: !!data.problem?.description,
+        descriptionLength: data.problem?.description?.length || 0,
+        hasTestCases: !!data.testCases,
+        testCasesCount: Array.isArray(data.testCases) ? data.testCases.length : 0
+      });
+      
+      console.log('🔍 Setting currentProblem to:', data.problem);
       setCurrentProblem(data.problem);
-      // Note: Solution is NOT sent to all players anymore
       
       // Update game state with test cases if available
       if (data.testCases) {
@@ -293,7 +311,28 @@ const GameRoom: React.FC = () => {
     // NEW: Handle solution sent only to bug introducer
     socket.on('solution_ready', (data) => {
       console.log('✅ Solution received (bug introducer only):', data.solution.substring(0, 50) + '...');
+      console.log('🔍 Setting currentSolution state to:', data.solution.length, 'characters');
+      console.log('🔍 Full solution data:', data);
+      console.log('🔍 Current gameState:', gameState);
+      console.log('🔍 Am I the bug introducer?', gameState?.bugIntroducer === playerId);
       setCurrentSolution(data.solution);
+    });
+
+    // Handle round loading states
+    socket.on('round_loading', (data) => {
+      console.log('⏳ Round loading:', data.message);
+      setIsRoundLoading(true);
+      setLoadingMessage(data.message);
+      // Clear previous round data
+      setCurrentProblem(null);
+      setCurrentSolution('');
+      setBuggyCode('');
+    });
+
+    socket.on('round_ready', () => {
+      console.log('✅ Round ready, clearing loading state');
+      setIsRoundLoading(false);
+      setLoadingMessage('');
     });
 
     socket.on('debugging_phase', (data) => {
@@ -495,6 +534,39 @@ const GameRoom: React.FC = () => {
 
   return (
     <GameContainer>
+      {/* Loading Screen Overlay */}
+      {isRoundLoading && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          color: 'white'
+        }}>
+          <div style={{
+            textAlign: 'center',
+            padding: '2rem'
+          }}>
+            <div style={{
+              width: '60px',
+              height: '60px',
+              border: '4px solid #333',
+              borderTop: '4px solid #00d2ff',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 1rem'
+            }}></div>
+            <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.5rem' }}>{loadingMessage}</h2>
+            <p style={{ margin: 0, opacity: 0.8 }}>Preparing your next coding challenge...</p>
+          </div>
+        </div>
+      )}
       <GameHeader
         gameState={gameState}
         playerId={playerId}
