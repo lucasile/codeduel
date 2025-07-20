@@ -336,9 +336,9 @@ const GameRoom: React.FC = () => {
       });
       
       if (data.powerUpType === 'timeFreeze') {
-        console.log('❄️ Time Freeze activated! +15 seconds added to timer');
+        console.log('🧪 Pest Control activated! +15 seconds added to timer');
       } else if (data.powerUpType === 'lineCorruption') {
-        console.log('🔥 Line Corruption activated! You can now edit 2 lines.');
+        console.log('� Ant Colony activated! You can now edit 2 lines.');
         setLineCorruptionActive(true);
       }
     });
@@ -390,7 +390,7 @@ const GameRoom: React.FC = () => {
     // Reset line corruption after use
     if (lineCorruptionActive) {
       setLineCorruptionActive(false);
-      console.log('⚡ Line Corruption power-up used!');
+      console.log('🐜 Ant Colony power-up used!');
     }
   };
 
@@ -573,8 +573,8 @@ const GameRoom: React.FC = () => {
                         opacity: (canUseLineCorruption || lineCorruptionActive) ? 1 : 0.6
                       }}
                     >
-                      {lineCorruptionActive ? '🔥 Line Corruption Active' : 
-                       (canUseLineCorruption ? '🔥 Activate Line Corruption' : '🔥 Line Corruption Used')}
+                      {lineCorruptionActive ? '🐜 Ant Colony Active' : 
+                       (canUseLineCorruption ? '🐜 Activate Ant Colony' : '� Ant Colony Used')}
                     </button>
                     <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#636e72' }}>
                       {lineCorruptionActive ? 'You can edit 2 lines!' : 
@@ -598,7 +598,7 @@ const GameRoom: React.FC = () => {
                         onClick={() => {
                           if (canUseTimeFreeze) {
                             handleUsePowerUp('timeFreeze');
-                            console.log('❄️ Time Freeze button clicked - calling backend');
+                            console.log('🧪 Pest Control button clicked - calling backend');
                           }
                         }}
                         disabled={!canUseTimeFreeze}
@@ -614,7 +614,7 @@ const GameRoom: React.FC = () => {
                           opacity: canUseTimeFreeze ? 1 : 0.6
                         }}
                       >
-                        {canUseTimeFreeze ? '❄️ Use Time Freeze' : '❄️ Time Freeze Used'}
+                        {canUseTimeFreeze ? '🧪 Use Pest Control' : '🧪 Pest Control Used'}
                       </button>
                       <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#636e72' }}>
                         Pause timer for 15 seconds ({timeFreezeUses} use{timeFreezeUses !== 1 ? 's' : ''} left this game)

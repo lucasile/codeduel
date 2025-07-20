@@ -195,11 +195,11 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
             
             <PowerUpStatus>
               <PowerUpItem>
-                <span>🔥 Line Corruption:</span>
+                <span>🐜 Ant Colony:</span>
                 <span>{playerPowerUps.lineCorruption}</span>
               </PowerUpItem>
               <PowerUpItem>
-                <span>❄️ Time Freeze:</span>
+                <span>🧪 Pest Control:</span>
                 <span>{playerPowerUps.timeFreeze}</span>
               </PowerUpItem>
             </PowerUpStatus>
