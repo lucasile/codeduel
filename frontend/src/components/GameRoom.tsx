@@ -501,6 +501,9 @@ const GameRoom: React.FC = () => {
         gameState={gameState}
         playerId={playerId}
         onUsePowerUp={handleUsePowerUp}
+        currentPhase={gameState.currentPhase}
+        currentBugIntroducer={gameState.bugIntroducer}
+        currentDebugger={gameState.debugger}
       />
       
       <GameContent>
@@ -547,7 +550,8 @@ const GameRoom: React.FC = () => {
                 const playerIndex = gameState.players.findIndex(p => p.id === playerId);
                 const playerKey = playerIndex === 0 ? 'player1' : 'player2';
                 const lineCorruptionUses = gameState.powerUps[playerKey]?.lineCorruption || 0;
-                const canUseLineCorruption = lineCorruptionUses > 0 && !lineCorruptionActive;
+                const isCurrentBugIntroducer = playerId === gameState.bugIntroducer;
+                const canUseLineCorruption = lineCorruptionUses > 0 && !lineCorruptionActive && isCurrentBugIntroducer;
                 
                 return (
                   <div style={{ marginBottom: '10px' }}>
@@ -560,7 +564,7 @@ const GameRoom: React.FC = () => {
                           setLineCorruptionActive(false);
                         }
                       }}
-                      disabled={lineCorruptionUses === 0 && !lineCorruptionActive}
+                      disabled={!canUseLineCorruption && !lineCorruptionActive}
                       style={{
                         padding: '8px 12px',
                         backgroundColor: lineCorruptionActive ? '#00b894' : (canUseLineCorruption ? '#fd79a8' : '#95a5a6'),
@@ -590,7 +594,8 @@ const GameRoom: React.FC = () => {
                   const playerIndex = gameState.players.findIndex(p => p.id === playerId);
                   const playerKey = playerIndex === 0 ? 'player1' : 'player2';
                   const timeFreezeUses = gameState.powerUps[playerKey]?.timeFreeze || 0;
-                  const canUseTimeFreeze = timeFreezeUses > 0;
+                  const isCurrentDebugger = playerId === gameState.debugger;
+                  const canUseTimeFreeze = timeFreezeUses > 0 && isCurrentDebugger;
                   
                   return (
                     <>

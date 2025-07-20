@@ -1126,6 +1126,22 @@ function initializeSocket(io) {
       const playerIndex = game.players.findIndex(p => p.id === socket.id);
       const playerKey = playerIndex === 0 ? 'player1' : 'player2';
 
+      // Check role-based restrictions
+      const isCurrentBugIntroducer = socket.id === game.currentBugIntroducer;
+      const isCurrentDebugger = socket.id === game.currentDebugger;
+
+      // Ant Colony (lineCorruption) can only be used by the bug introducer
+      if (powerUpType === 'lineCorruption' && !isCurrentBugIntroducer) {
+        socket.emit('error', { message: 'Ant Colony can only be used by the bug introducer!' });
+        return;
+      }
+
+      // Pest Control (timeFreeze) can only be used by the debugger
+      if (powerUpType === 'timeFreeze' && !isCurrentDebugger) {
+        socket.emit('error', { message: 'Pest Control can only be used by the debugger!' });
+        return;
+      }
+
       if (game.powerUps[playerKey][powerUpType] > 0) {
         game.powerUps[playerKey][powerUpType]--;
 

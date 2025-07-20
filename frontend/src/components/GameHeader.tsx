@@ -85,9 +85,19 @@ interface GameHeaderProps {
   gameState: GameState;
   playerId: string;
   onUsePowerUp: (powerUpType: 'lineCorruption' | 'timeFreeze') => void;
+  currentPhase: string;
+  currentBugIntroducer: string | null;
+  currentDebugger: string | null;
 }
 
-const GameHeader: React.FC<GameHeaderProps> = ({ gameState, playerId, onUsePowerUp }) => {
+const GameHeader: React.FC<GameHeaderProps> = ({ 
+  gameState, 
+  playerId, 
+  onUsePowerUp, 
+  currentPhase, 
+  currentBugIntroducer, 
+  currentDebugger 
+}) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -100,6 +110,16 @@ const GameHeader: React.FC<GameHeaderProps> = ({ gameState, playerId, onUsePower
   };
 
   const playerPowerUps = getPlayerPowerUps();
+
+  // Role-based power-up availability
+  const isCurrentBugIntroducer = playerId === currentBugIntroducer;
+  const isCurrentDebugger = playerId === currentDebugger;
+  
+  // Ant Colony can only be used by bug introducer
+  const canUseAntColony = playerPowerUps.lineCorruption > 0 && isCurrentBugIntroducer;
+  
+  // Pest Control can only be used by debugger  
+  const canUsePestControl = playerPowerUps.timeFreeze > 0 && isCurrentDebugger;
 
   return (
     <HeaderContainer>
@@ -114,18 +134,18 @@ const GameHeader: React.FC<GameHeaderProps> = ({ gameState, playerId, onUsePower
 
       <PowerUpContainer>
         <PowerUpButton
-          available={playerPowerUps.lineCorruption > 0}
+          available={canUseAntColony}
           onClick={() => onUsePowerUp('lineCorruption')}
-          disabled={playerPowerUps.lineCorruption === 0}
+          disabled={!canUseAntColony}
         >
           🐜 Ant Colony
           <PowerUpCount>{playerPowerUps.lineCorruption}</PowerUpCount>
         </PowerUpButton>
         
         <PowerUpButton
-          available={playerPowerUps.timeFreeze > 0}
+          available={canUsePestControl}
           onClick={() => onUsePowerUp('timeFreeze')}
-          disabled={playerPowerUps.timeFreeze === 0}
+          disabled={!canUsePestControl}
         >
           🧪 Pest Control
           <PowerUpCount>{playerPowerUps.timeFreeze}</PowerUpCount>
