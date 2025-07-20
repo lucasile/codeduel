@@ -3,15 +3,54 @@ require('dotenv').config();
 
 const { v4: uuidv4 } = require('uuid');
 const { VellumClient } = require('vellum-ai');
+const { testProblems } = require('../data/testProblems');
 
 // Environment variables
 const LEETCODE_API_BASE_URL = process.env.LEETCODE_API_BASE_URL || 'https://leetcode-api-pied.vercel.app';
+const TEST_MODE = process.env.TEST_MODE === 'true';
+
+console.log(`🧪 Test Mode: ${TEST_MODE ? 'ENABLED' : 'DISABLED'} - ${TEST_MODE ? 'Using preloaded problems' : 'Using LeetCode + Vellum API'}`);
 
 // Cache for Vellum-generated solutions to avoid regenerating
 const solutionCache = new Map();
 
 // Pre-loaded problems queue for instant round transitions
 const preloadedProblems = new Map(); // gameId -> [problem1, problem2, ...]
+
+// Test mode problem counter for cycling through test problems
+const testProblemCounters = new Map(); // gameId -> currentIndex
+
+// Test mode: Get next preloaded problem instead of fetching from APIs
+function getTestModeProblem(gameId) {
+  if (!testProblemCounters.has(gameId)) {
+    testProblemCounters.set(gameId, 0);
+  }
+  
+  const currentIndex = testProblemCounters.get(gameId);
+  const problem = testProblems[currentIndex % testProblems.length];
+  
+  // Increment counter for next round
+  testProblemCounters.set(gameId, currentIndex + 1);
+  
+  console.log(`🧪 Test Mode: Using preloaded problem ${currentIndex + 1}/${testProblems.length} - "${problem.title}"`);
+  
+  // Format problem to match LeetCode API structure
+  const formattedProblem = {
+    id: problem.id,
+    frontend_id: problem.id,
+    title: problem.title,
+    description: problem.description,
+    difficulty: problem.difficulty,
+    examples: problem.examples,
+    constraints: problem.constraints
+  };
+  
+  return {
+    problem: formattedProblem,
+    solution: problem.solution,
+    testCases: problem.testCases
+  };
+}
 
 // Note: Using built-in fetch (Node.js 18+)
 // If using older Node.js version, you may need to polyfill fetch
@@ -180,9 +219,32 @@ async function triggerContinuousPreloading(gameId, io) {
   console.log(`🔄 Continuous pre-loading: Adding ${problemsToAdd} problems to queue (current: ${queue.length}, remaining rounds: ${remainingRounds})`);
   
   // Pre-load problems in background (non-blocking)
-  preloadProblemsForGame(gameId, problemsToAdd).catch(error => {
-    console.error('❌ Error in continuous pre-loading:', error);
-  });
+  if (TEST_MODE) {
+    // Test mode: Pre-load test problems instantly
+    preloadTestProblems(gameId, problemsToAdd);
+  } else {
+    // Production mode: Pre-load from LeetCode + Vellum
+    preloadProblemsForGame(gameId, problemsToAdd).catch(error => {
+      console.error('❌ Error in continuous pre-loading:', error);
+    });
+  }
+}
+
+// Test mode: Pre-load test problems instantly (no API calls)
+function preloadTestProblems(gameId, problemsToAdd) {
+  if (!preloadedProblems.has(gameId)) {
+    preloadedProblems.set(gameId, []);
+  }
+  
+  const queue = preloadedProblems.get(gameId);
+  
+  for (let i = 0; i < problemsToAdd; i++) {
+    const testData = getTestModeProblem(gameId);
+    queue.push(testData);
+    console.log(`🧪 Test Mode: Pre-loaded "${testData.problem.title}" to queue`);
+  }
+  
+  console.log(`✅ Test Mode: Pre-loaded ${problemsToAdd} problems instantly`);
 }
 
 // Pre-load problems for future rounds to eliminate wait time
@@ -369,7 +431,82 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
   // Send loading state to frontend
   io.to(gameId).emit('round_loading', { message: 'Loading next problem...' });
   
-  // Check if we have pre-loaded problems first
+  // Test mode: Use preloaded test problems instead of API calls
+  if (TEST_MODE) {
+    console.log(`🧪 Test Mode: Fetching preloaded test problem for game ${gameId}`);
+    
+    // Check if we have pre-loaded problems first
+    const queue = preloadedProblems.get(gameId);
+    if (queue && queue.length > 0) {
+      console.log(`⚡ Using pre-loaded test problem for game ${gameId}`);
+      const preloadedData = queue.shift(); // Remove from queue
+      
+      // Send test problem data immediately
+      const { problem, solution, testCases } = preloadedData;
+      
+      // Store in game state
+      game.currentProblem = problem;
+      game.currentSolution = solution;
+      game.currentTestCases = testCases;
+      
+      // Send to frontend immediately (no streaming delay in test mode)
+      io.to(gameId).emit('problem_loaded', {
+        problem: problem,
+        testCases: testCases
+      });
+      
+      // Send solution to bug introducer immediately
+      const bugIntroducer = game.players.find(p => p.role === 'bug_introducer');
+      if (bugIntroducer) {
+        io.to(bugIntroducer.socketId).emit('solution_ready', { solution: solution });
+      } else if (game.currentBugIntroducer) {
+        io.to(game.currentBugIntroducer).emit('solution_ready', { solution: solution });
+      }
+      
+      // Clear loading overlay immediately
+      io.to(gameId).emit('round_ready');
+      
+      // Trigger continuous pre-loading for next round
+      triggerContinuousPreloading(gameId, io);
+      
+      console.log(`✅ Test Mode: Sent problem "${problem.title}" instantly`);
+      return;
+    } else {
+      // No pre-loaded problems, generate one instantly
+      const testData = getTestModeProblem(gameId);
+      const { problem, solution, testCases } = testData;
+      
+      // Store in game state
+      game.currentProblem = problem;
+      game.currentSolution = solution;
+      game.currentTestCases = testCases;
+      
+      // Send to frontend immediately
+      io.to(gameId).emit('problem_loaded', {
+        problem: problem,
+        testCases: testCases
+      });
+      
+      // Send solution to bug introducer immediately
+      const bugIntroducer = game.players.find(p => p.role === 'bug_introducer');
+      if (bugIntroducer) {
+        io.to(bugIntroducer.socketId).emit('solution_ready', { solution: solution });
+      } else if (game.currentBugIntroducer) {
+        io.to(game.currentBugIntroducer).emit('solution_ready', { solution: solution });
+      }
+      
+      // Clear loading overlay immediately
+      io.to(gameId).emit('round_ready');
+      
+      // Trigger continuous pre-loading for next round
+      triggerContinuousPreloading(gameId, io);
+      
+      console.log(`✅ Test Mode: Generated and sent problem "${problem.title}" instantly`);
+      return;
+    }
+  }
+  
+  // Production mode: Check if we have pre-loaded problems first
   const queue = preloadedProblems.get(gameId);
   if (queue && queue.length > 0) {
     console.log(`⚡ Using pre-loaded problem for game ${gameId}`);
@@ -901,6 +1038,7 @@ function initializeSocket(io) {
       game.buggyCode = buggyCode;
       game.bugLine = lineNumber;
       game.editedLines = editedLines;
+      game.editedLinesCount = editedLines.length; // Track number of lines edited for debugger limit
       game.currentPhase = 'debugging';
       game.timeLeft = 180; // 3 minutes for debugging
       game.startTimer(io);
@@ -912,6 +1050,7 @@ function initializeSocket(io) {
         buggyCode,
         lineNumber,
         editedLines,
+        editedLinesCount: 1, // Bug fixer always limited to 1 line for maximum challenge
         phase: 'debugging',
         timeLeft: game.timeLeft,
         debugger: game.currentDebugger
@@ -919,9 +1058,18 @@ function initializeSocket(io) {
     });
 
     // Handle bug fix submission
-    socket.on('submit_fix', ({ gameId, fixedCode, foundBugLine }) => {
+    socket.on('submit_fix', ({ gameId, fixedCode, foundBugLine, debuggerEditedLines }) => {
       const game = games.get(gameId);
       if (!game || game.currentDebugger !== socket.id) return;
+      
+      // Validate debugger line edit limit (always 1 line for maximum challenge)
+      const allowedLineEdits = 1; // Bug fixer can only edit 1 line, regardless of bug introducer
+      if (debuggerEditedLines && debuggerEditedLines.length > allowedLineEdits) {
+        socket.emit('error', { 
+          message: `You can only edit ${allowedLineEdits} line to fix this bug! You edited ${debuggerEditedLines.length} lines.` 
+        });
+        return;
+      }
 
       // Stop the timer when fix is submitted
       game.clearTimer();

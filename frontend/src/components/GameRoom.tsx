@@ -117,6 +117,8 @@ const GameRoom: React.FC = () => {
   const [playerId, setPlayerId] = useState<string>('');
   const [isRoundLoading, setIsRoundLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const [bugIntroducerEditedLines, setBugIntroducerEditedLines] = useState<number[]>([]);
+  const [maxEditableLines, setMaxEditableLines] = useState<number | undefined>(undefined);
 
   // Debug: Track currentSolution changes
   useEffect(() => {
@@ -248,6 +250,12 @@ const GameRoom: React.FC = () => {
     socket.on('bug_introduced', (data) => {
       console.log('🐛 Bug introduced - debugger receives buggy code only');
       setBuggyCode(data.buggyCode);
+      
+      // Store bug introducer's edited lines and set line limit for debugger
+      setBugIntroducerEditedLines(data.editedLines || []);
+      setMaxEditableLines(data.editedLinesCount);
+      console.log(`📝 Line limit set: debugger can edit max ${data.editedLinesCount} lines`);
+      console.log(`🎯 Bug introducer edited lines:`, data.editedLines);
       
       // Clear solution for debugger (they should never see the original solution)
       if (gameState?.currentPhase === 'debugging' && gameState.debugger === playerId) {
@@ -381,13 +389,14 @@ const GameRoom: React.FC = () => {
     }
   };
 
-  const handleSubmitFix = (fixedCode: string, foundBugLine: number) => {
+  const handleSubmitFix = (fixedCode: string, foundBugLine: number, debuggerEditedLines?: number[]) => {
     if (!socket || !gameId) return;
     
     socket.emit('submit_fix', {
       gameId,
       fixedCode,
-      foundBugLine
+      foundBugLine,
+      debuggerEditedLines
     });
   };
 
@@ -505,6 +514,8 @@ const GameRoom: React.FC = () => {
             gamePhase={gameState.currentPhase}
             isMyTurn={isMyTurn(gameState.currentPhase)}
             lineCorruptionActive={lineCorruptionActive}
+            bugIntroducerEditedLines={bugIntroducerEditedLines}
+            maxEditableLines={maxEditableLines}
             onIntroduceBug={handleIntroduceBug}
             onSubmitFix={handleSubmitFix}
           />
