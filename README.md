@@ -104,7 +104,7 @@ For development and testing without external API dependencies:
 ## 🎯 Game Features
 
 ### Problem Management
-- **Curated Problem Set** - 20+ hand-selected free LeetCode problems
+- **LeetCode integration** to get problem information
 - **Duplicate Prevention** - No repeated problems within the same game
 - **Preloading System** - Background generation for instant round transitions
 - **Smart Parameter Parsing** - Automatic detection of function parameter types
