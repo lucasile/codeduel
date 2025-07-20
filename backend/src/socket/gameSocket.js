@@ -222,8 +222,18 @@ async function generateSolutionAndTests(problemHtml, problemId = null, onSolutio
 
 // Continuous pre-loading: Queue up next round immediately after current stream completes
 async function triggerContinuousPreloading(gameId, io) {
+  console.log(`🔄 triggerContinuousPreloading called for game ${gameId}`);
+  
   const game = games.get(gameId);
-  if (!game) return;
+  if (!game) {
+    console.log(`⚠️ Game ${gameId} not found, aborting preloading`);
+    return;
+  }
+  
+  // Check activePreloading status
+  console.log(`🔍 activePreloading status:`);
+  console.log(`   - Current activePreloading games: [${Array.from(activePreloading).join(', ')}]`);
+  console.log(`   - Is ${gameId} currently preloading? ${activePreloading.has(gameId)}`);
   
   // Prevent infinite loops - check if already preloading for this game
   if (activePreloading.has(gameId)) {
@@ -316,7 +326,6 @@ const CURATED_PROBLEMS = [
   28,  // Find the Index of the First Occurrence in a String
   121, // Best Time to Buy and Sell Stock
   136, // Single Number
-  148, // Sort List
   198  // House Robber
 ];
 
@@ -651,6 +660,7 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
         
         // 🚀 TRIGGER PRELOADING: Queue up next round now that current round tests are ready
         console.log('🔄 Cached tests received, triggering continuous pre-loading for next round...');
+        console.log(`📊 About to trigger preloading from PRELOADED problem callback for game ${gameId}`);
         triggerContinuousPreloading(gameId, io);
       }
     );
@@ -775,6 +785,7 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
           
           // 🚀 TRIGGER PRELOADING: Queue up next round now that current round tests are ready
           console.log('🔄 Tests received, triggering continuous pre-loading for next round...');
+          console.log(`📊 About to trigger preloading from LIVE-FETCHED problem callback for game ${gameId}`);
           triggerContinuousPreloading(gameId, io);
         }
       );

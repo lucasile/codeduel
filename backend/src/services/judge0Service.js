@@ -133,8 +133,34 @@ function createExecutablePythonCode(solutionCode, testCase) {
     if (paramCount === 1) {
       // Single parameter function
       if (Array.isArray(testInput)) {
-        functionCall = `solve(${JSON.stringify(testInput)})`;
-        console.log(`🔧 Generated function call (array as single param): ${functionCall}`);
+        // Get the parameter name to help determine expected type
+        const paramName = functionParams && functionParams[1].trim() ? 
+          functionParams[1].trim().split(',')[0].trim() : '';
+        
+        console.log(`🔧 Function parameter name: "${paramName}"`);
+        
+        // Smart array handling based on parameter name and context
+        const arrayIndicators = ['prices', 'nums', 'arr', 'array', 'list', 'values', 'elements'];
+        const singleIndicators = ['x', 'n', 'num', 'val', 'value', 'target', 'k'];
+        
+        const isArrayParam = arrayIndicators.some(indicator => 
+          paramName.toLowerCase().includes(indicator));
+        const isSingleParam = singleIndicators.some(indicator => 
+          paramName.toLowerCase() === indicator);
+        
+        console.log(`🔧 Parameter analysis: isArrayParam=${isArrayParam}, isSingleParam=${isSingleParam}`);
+        
+        if (testInput.length === 1 && isSingleParam && !isArrayParam) {
+          // Extract single element for clearly single-value parameters
+          const singleParam = testInput[0];
+          const paramString = typeof singleParam === 'string' ? `"${singleParam}"` : JSON.stringify(singleParam);
+          functionCall = `solve(${paramString})`;
+          console.log(`🔧 Generated function call (single element extracted): ${functionCall}`);
+        } else {
+          // Preserve array for array-based parameters or when unsure
+          functionCall = `solve(${JSON.stringify(testInput)})`;
+          console.log(`🔧 Generated function call (array preserved): ${functionCall}`);
+        }
       } else {
         const paramString = typeof testInput === 'string' ? `"${testInput}"` : JSON.stringify(testInput);
         functionCall = `solve(${paramString})`;
