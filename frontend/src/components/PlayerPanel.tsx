@@ -208,7 +208,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
       })}
 
       <ScoreSection>
-        <ScoreTitle>Round-Based System</ScoreTitle>
+        <ScoreTitle>Rules</ScoreTitle>
         <div style={{ color: '#d1d5db', fontSize: '0.9rem' }}>
           <div>• First to win 3 rounds wins the game</div>
           <div>• Debugger wins round by fixing the bug</div>

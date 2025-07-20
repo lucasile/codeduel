@@ -319,7 +319,7 @@ const GameRoom: React.FC = () => {
       setGameState(prev => prev ? {
         ...prev,
         currentPhase: 'bug_introduction',
-        currentRound: data.currentRound
+        ...(data.currentRound !== undefined && { currentRound: data.currentRound })
       } : null);
     });
 
