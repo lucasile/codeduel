@@ -1,4 +1,4 @@
-# Code Duel 🪳⚔️
+# 🐛 BUG BATTLE 🐛
 
 A competitive 1v1 coding game where players take turns introducing bugs and fixing them. Built with Node.js, React, and real-time WebSocket communication.
 
