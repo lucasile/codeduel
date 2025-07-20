@@ -1,7 +1,282 @@
+// Load environment variables
+require('dotenv').config();
+
 const { v4: uuidv4 } = require('uuid');
+const { VellumClient } = require('vellum-ai');
+
+// Environment variables
+const LEETCODE_API_BASE_URL = process.env.LEETCODE_API_BASE_URL || 'https://leetcode-api-pied.vercel.app';
+
+// Cache for Vellum-generated solutions to avoid regenerating
+const solutionCache = new Map();
+
+// Pre-loaded problems queue for instant round transitions
+const preloadedProblems = new Map(); // gameId -> [problem1, problem2, ...]
 
 // Note: Using built-in fetch (Node.js 18+)
 // If using older Node.js version, you may need to polyfill fetch
+
+// Initialize Vellum client
+const vellumClient = new VellumClient({ 
+  apiKey: process.env.VELLUM_API_KEY 
+});
+
+// Function to generate solution and tests using Vellum AI with streaming
+async function generateSolutionAndTests(problemHtml, problemId = null, onSolutionReady = null, onTestsReady = null) {
+  try {
+    // Check cache first if we have a problem ID
+    const cacheKey = problemId || problemHtml.substring(0, 100);
+    if (solutionCache.has(cacheKey)) {
+      console.log('⚡ Using cached solution for problem:', problemId || 'unknown');
+      const cached = solutionCache.get(cacheKey);
+      // Call callbacks immediately for cached results
+      if (onSolutionReady) onSolutionReady(cached.solution);
+      if (onTestsReady) onTestsReady(cached.tests);
+      return cached;
+    }
+    
+    console.log('🤖 Generating solution with Vellum AI (streaming)...');
+    
+    const response = await vellumClient.executeWorkflowStream({
+      workflowDeploymentId: process.env.VELLUM_WORKFLOW_DEPLOYMENT_ID,
+      inputs: [{
+        name: "leetcode_problem_html",
+        type: "STRING",
+        value: problemHtml
+      }]
+    });
+    
+    let solution = '';
+    let tests = [];
+    let solutionReceived = false;
+    let testsReceived = false;
+    
+    // Process streaming response
+    console.log('🔍 Starting to process Vellum stream...');
+    let streamItemCount = 0;
+    
+    for await (const item of response) {
+      streamItemCount++;
+      console.log(`🔍 Vellum stream item ${streamItemCount}:`, JSON.stringify(item, null, 2));
+      
+      // Check for individual output (streaming items)
+      if (item.data && item.data.output && item.data.output.state === 'FULFILLED') {
+        const output = item.data.output;
+        console.log('🔍 Processing individual output:', output.name, 'with value length:', output.value?.length || 0);
+        
+        if (output.name === 'solution' && output.value && !solutionReceived) {
+          solution = output.value;
+          solutionReceived = true;
+          console.log('✅ Solution received via stream, length:', solution.length);
+          if (onSolutionReady) {
+            console.log('📤 Calling onSolutionReady callback...');
+            onSolutionReady(solution);
+          } else {
+            console.log('⚠️ No onSolutionReady callback provided!');
+          }
+        }
+        
+        if (output.name === 'tests' && output.value && !testsReceived) {
+          tests = output.value;
+          testsReceived = true;
+          console.log('✅ Tests received via stream, count:', Array.isArray(tests) ? tests.length : 'not array');
+          if (onTestsReady) {
+            console.log('📤 Calling onTestsReady callback...');
+            onTestsReady(tests);
+          } else {
+            console.log('⚠️ No onTestsReady callback provided!');
+          }
+        }
+      }
+      
+      // Also check for final outputs array (final completion item)
+      else if (item.data && item.data.outputs && item.data.state === 'FULFILLED') {
+        console.log('🔍 Found final outputs array:', item.data.outputs.length, 'outputs');
+        for (const output of item.data.outputs) {
+          console.log('🔍 Processing final output:', output.name, 'with value length:', output.value?.length || 0);
+          
+          if (output.name === 'solution' && output.value && !solutionReceived) {
+            solution = output.value;
+            solutionReceived = true;
+            console.log('✅ Solution received via final outputs, length:', solution.length);
+            if (onSolutionReady) {
+              console.log('📤 Calling onSolutionReady callback...');
+              onSolutionReady(solution);
+            }
+          }
+          
+          if (output.name === 'tests' && output.value && !testsReceived) {
+            tests = output.value;
+            testsReceived = true;
+            console.log('✅ Tests received via final outputs, count:', Array.isArray(tests) ? tests.length : 'not array');
+            if (onTestsReady) {
+              console.log('📤 Calling onTestsReady callback...');
+              onTestsReady(tests);
+            }
+          }
+        }
+      }
+      
+      else {
+        console.log('🔍 Stream item has no relevant outputs (state:', item.data?.state || 'unknown', ')');
+      }
+    }
+    
+    console.log(`🏁 Finished processing Vellum stream. Total items: ${streamItemCount}`);
+    console.log(`🏁 Final state - Solution received: ${solutionReceived}, Tests received: ${testsReceived}`);
+    
+    // Ensure we have both solution and tests
+    if (!solution) {
+      console.warn('⚠️ Warning: No solution received from Vellum stream!');
+    }
+    if (!tests || tests.length === 0) {
+      console.warn('⚠️ Warning: No tests received from Vellum stream!');
+    }
+    
+    console.log('✅ Vellum AI generated solution and tests successfully');
+    
+    // Cache the result for future use
+    const result = { solution, tests };
+    solutionCache.set(cacheKey, result);
+    console.log('💾 Cached solution for future use');
+    
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Failed to generate solution with Vellum AI:', error);
+    
+    // Fallback to placeholder solution and tests
+    const fallbackSolution = "# Sample solution\n# TODO: Integrate with Vellum API for real solutions\ndef solution():\n    pass";
+    const fallbackTests = [
+      { input: "example input", expectedOutput: "example output" },
+      { input: "test case 2", expectedOutput: "expected result 2" }
+    ];
+    
+    console.log('🔄 Using fallback solution due to Vellum AI error');
+    return { solution: fallbackSolution, tests: fallbackTests };
+  }
+}
+
+// Continuous pre-loading: Queue up next round immediately after current stream completes
+async function triggerContinuousPreloading(gameId, io) {
+  const game = games.get(gameId);
+  if (!game) return;
+  
+  // Check current queue size
+  const queue = preloadedProblems.get(gameId) || [];
+  const totalRounds = game.totalRounds || 3; // Default to 3 rounds
+  const currentRound = game.currentRound || 1;
+  
+  // Calculate max problems we should have (never exceed total rounds)
+  const remainingRounds = totalRounds - currentRound;
+  const maxProblemsNeeded = Math.min(remainingRounds, 2); // Keep 2 ahead, but never exceed remaining rounds
+  
+  if (queue.length >= maxProblemsNeeded || remainingRounds <= 0) {
+    console.log(`⚡ Queue has ${queue.length} problems, remaining rounds: ${remainingRounds}, skipping pre-load`);
+    return;
+  }
+  
+  const problemsToAdd = maxProblemsNeeded - queue.length;
+  console.log(`🔄 Continuous pre-loading: Adding ${problemsToAdd} problems to queue (current: ${queue.length}, remaining rounds: ${remainingRounds})`);
+  
+  // Pre-load problems in background (non-blocking)
+  preloadProblemsForGame(gameId, problemsToAdd).catch(error => {
+    console.error('❌ Error in continuous pre-loading:', error);
+  });
+}
+
+// Pre-load problems for future rounds to eliminate wait time
+async function preloadProblemsForGame(gameId, roundsToPreload = 2) {
+  const game = games.get(gameId);
+  if (!game) return;
+  
+  console.log(`🔄 Pre-loading ${roundsToPreload} problems for game ${gameId}...`);
+  
+  if (!preloadedProblems.has(gameId)) {
+    preloadedProblems.set(gameId, []);
+  }
+  
+  const queue = preloadedProblems.get(gameId);
+  
+  // Pre-load problems in background
+  for (let i = 0; i < roundsToPreload; i++) {
+    try {
+      // Fetch random problem with error handling
+      const randomResponse = await fetch(`${LEETCODE_API_BASE_URL}/random`);
+      
+      // Check if response is OK and contains JSON
+      if (!randomResponse.ok) {
+        console.log('⚠️ LeetCode API returned error status:', randomResponse.status);
+        continue;
+      }
+      
+      const randomText = await randomResponse.text();
+      if (randomText.startsWith('<!DOCTYPE') || randomText.startsWith('<html')) {
+        console.log('⚠️ LeetCode API returned HTML instead of JSON, skipping preload');
+        continue;
+      }
+      
+      const randomData = JSON.parse(randomText);
+      
+      if (!randomData || !randomData.frontend_id) {
+        console.log('⚠️ Invalid random problem data, skipping preload');
+        continue;
+      }
+      
+      // Get full problem details with error handling
+      const problemResponse = await fetch(`${LEETCODE_API_BASE_URL}/problem/${randomData.frontend_id}`);
+      
+      if (!problemResponse.ok) {
+        console.log('⚠️ Problem API returned error status:', problemResponse.status);
+        continue;
+      }
+      
+      const problemText = await problemResponse.text();
+      if (problemText.startsWith('<!DOCTYPE') || problemText.startsWith('<html')) {
+        console.log('⚠️ Problem API returned HTML instead of JSON, skipping preload');
+        continue;
+      }
+      
+      const leetcodeProblem = JSON.parse(problemText);
+      
+      if (!leetcodeProblem || !leetcodeProblem.content || leetcodeProblem.isPaidOnly) {
+        console.log('⚠️ Premium or invalid problem, skipping preload');
+        continue;
+      }
+      
+      const problem = {
+        id: leetcodeProblem.id,
+        title: leetcodeProblem.title,
+        difficulty: leetcodeProblem.difficulty,
+        description: leetcodeProblem.content,
+        examples: leetcodeProblem.examples || [],
+        constraints: []
+      };
+      
+      // Pre-generate solution and tests (this will cache them)
+      console.log(`🤖 Pre-generating solution for: ${problem.title}`);
+      await generateSolutionAndTests(leetcodeProblem.content, leetcodeProblem.frontend_id);
+      
+      queue.push({
+        problem,
+        leetcodeProblem,
+        preloaded: true
+      });
+      
+      console.log(`✅ Pre-loaded problem: ${problem.title}`);
+      
+    } catch (error) {
+      console.error('❌ Error pre-loading problem:', error);
+    }
+  }
+  
+  console.log(`🎯 Pre-loaded ${queue.length} problems for game ${gameId}`);
+  
+  // If we couldn't pre-load any problems, log a warning but continue
+  if (queue.length === 0) {
+    console.log('⚠️ Warning: Could not pre-load any problems. Game will use live fetching.');
+  }
+}
 
 // Generate 4-digit alphanumeric game code
 function generateGameCode() {
@@ -87,17 +362,76 @@ const sampleTestCases = {
   3: [{ input: ["()"], expected: true }, { input: ["()[]{}"], expected: true }, { input: ["(]"], expected: false }]
 };
 
-// Function to fetch and send a random problem to the game (with premium problem retry)
 async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
   const game = games.get(gameId);
   if (!game) return;
   
+  // Send loading state to frontend
+  io.to(gameId).emit('round_loading', { message: 'Loading next problem...' });
+  
+  // Check if we have pre-loaded problems first
+  const queue = preloadedProblems.get(gameId);
+  if (queue && queue.length > 0) {
+    console.log(`⚡ Using pre-loaded problem for game ${gameId}`);
+    const preloadedData = queue.shift(); // Remove from queue
+    
+    // Use pre-loaded problem and solution (already cached)
+    const problem = preloadedData.problem;
+    const leetcodeProblem = preloadedData.leetcodeProblem;
+    
+    // Send problem immediately
+    game.currentProblem = problem;
+    io.to(gameId).emit('problem_loaded', { problem });
+    console.log(`⚡ Pre-loaded problem sent: "${problem.title}"`);
+    
+    // Get cached solution and tests (will be instant from cache)
+    const { solution, tests: testCases } = await generateSolutionAndTests(
+      leetcodeProblem.content, 
+      leetcodeProblem.frontend_id,
+      // Callbacks for streaming (will be instant from cache)
+      (solutionReady) => {
+        console.log('⚡ Cached solution ready, sending to bug introducer and clearing loading...');
+        console.log('🔍 Game state:', {
+          currentBugIntroducer: game.currentBugIntroducer,
+          players: game.players?.map(p => ({ id: p.id, name: p.name, role: p.role, socketId: p.socketId })),
+          gamePhase: game.phase
+        });
+        
+        const bugIntroducer = game.players.find(p => p.role === 'bug_introducer');
+        console.log('🔍 Found bug introducer:', bugIntroducer);
+        
+        if (bugIntroducer) {
+          console.log('📤 Emitting solution_ready to:', bugIntroducer.socketId);
+          io.to(bugIntroducer.socketId).emit('solution_ready', { solution: solutionReady });
+        } else {
+          console.log('❌ Bug introducer not found! Trying currentBugIntroducer...');
+          if (game.currentBugIntroducer) {
+            console.log('📤 Emitting solution_ready to currentBugIntroducer:', game.currentBugIntroducer);
+            io.to(game.currentBugIntroducer).emit('solution_ready', { solution: solutionReady });
+          }
+        }
+        // Clear loading overlay as soon as solution is ready
+        io.to(gameId).emit('round_ready');
+      },
+      (testsReady) => {
+        game.currentTestCases = testsReady;
+      }
+    );
+    
+    // Store solution in game state
+    game.currentSolution = solution;
+    
+    console.log(`✅ Instantly loaded pre-cached problem: "${problem.title}"`);
+    return;
+  }
+  
+  // Fallback to live fetching if no pre-loaded problems
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`🎲 Fetching random LeetCode problem for game ${gameId}... (Attempt ${attempt}/${maxRetries})`);
       
       // Step 1: Get random problem ID
-      const randomResponse = await fetch('https://leetcode-api-pied.vercel.app/random');
+      const randomResponse = await fetch(`${LEETCODE_API_BASE_URL}/random`);
       if (!randomResponse.ok) {
         throw new Error(`LeetCode API random error: ${randomResponse.status}`);
       }
@@ -115,7 +449,7 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
       
       // Step 2: Get full problem details using the frontend_id (LeetCode ID)
       console.log(`🔍 Fetching problem details for LeetCode ID: ${problemId}`);
-      const problemResponse = await fetch(`https://leetcode-api-pied.vercel.app/problem/${problemId}`);
+      const problemResponse = await fetch(`${LEETCODE_API_BASE_URL}/problem/${problemId}`);
       console.log(`🔍 Problem API response status: ${problemResponse.status}`);
       
       if (!problemResponse.ok) {
@@ -152,35 +486,57 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
         constraints: [] // Will be parsed from content if needed
       };
       
-      // For now, use placeholder solution as requested
-      const solution = "# Sample solution\n# TODO: Integrate with Vellum API for real solutions\ndef solution():\n    pass";
+      // Send problem immediately (before generating solution)
+      game.currentProblem = problem;
+      io.to(gameId).emit('problem_loaded', { problem });
+      console.log(`✅ Problem sent: "${problem.title}" (${problem.difficulty})`);
       
-      // Generate basic test cases (placeholder for now)
-      const testCases = [
-        { input: "example input", expectedOutput: "example output" },
-        { input: "test case 2", expectedOutput: "expected result 2" }
-      ];
-      
-      console.log(`✅ Fetched LeetCode problem: "${problem.title}" (${problem.difficulty})`);
-      
-      // Send problem to all players
-      io.to(gameId).emit('problem_ready', {
-        problem,
-        testCases
-      });
-      
-      // Send solution ONLY to the bug introducer
-      if (game.currentBugIntroducer) {
-        const bugIntroducerSocket = [...io.sockets.sockets.values()]
-          .find(socket => socket.id === game.currentBugIntroducer);
-        
-        if (bugIntroducerSocket) {
-          bugIntroducerSocket.emit('solution_ready', {
-            solution
+      // Generate solution and test cases using Vellum AI with streaming
+      const { solution, tests: testCases } = await generateSolutionAndTests(
+        leetcodeProblem.content, 
+        leetcodeProblem.frontend_id,
+        // Callback for when solution is ready
+        (solutionReady) => {
+          console.log('⚡ Solution ready, sending to bug introducer and clearing loading...');
+          console.log('🔍 Game state:', {
+            currentBugIntroducer: game.currentBugIntroducer,
+            players: game.players?.map(p => ({ id: p.id, name: p.name, role: p.role, socketId: p.socketId })),
+            gamePhase: game.phase
           });
-          console.log(`✅ Sample solution sent to bug introducer only`);
+          
+          // Send solution immediately to bug introducer
+          const bugIntroducer = game.players.find(p => p.role === 'bug_introducer');
+          console.log('🔍 Found bug introducer:', bugIntroducer);
+          
+          if (bugIntroducer) {
+            console.log('📤 Emitting solution_ready to:', bugIntroducer.socketId);
+            io.to(bugIntroducer.socketId).emit('solution_ready', { solution: solutionReady });
+          } else {
+            console.log('❌ Bug introducer not found! Trying currentBugIntroducer...');
+            if (game.currentBugIntroducer) {
+              console.log('📤 Emitting solution_ready to currentBugIntroducer:', game.currentBugIntroducer);
+              io.to(game.currentBugIntroducer).emit('solution_ready', { solution: solutionReady });
+            }
+          }
+          // Clear loading overlay as soon as solution is ready
+          io.to(gameId).emit('round_ready');
+        },
+        // Callback for when tests are ready  
+        (testsReady) => {
+          console.log('⚡ Tests ready, storing for game...');
+          // Store tests immediately when ready (background process)
+          game.currentTestCases = testsReady;
         }
-      }
+      );
+      
+      console.log(`✅ Streaming generation completed for: "${problem.title}" (${problem.difficulty})`);
+      
+      // 🚀 IMMEDIATE CONTINUOUS PRE-LOADING: Queue up next round as soon as streaming completes
+      console.log('🔄 Streaming completed, immediately triggering continuous pre-loading for next round...');
+      triggerContinuousPreloading(gameId, io);
+      
+      // Store solution in game state (problem already stored above)
+      game.currentSolution = solution;
       
       // Success! Exit the retry loop
       return;
@@ -209,7 +565,7 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
   console.log(`🔄 Using fallback problem: "${problem.title}"`);
   
   // Send fallback problem to all players
-  io.to(gameId).emit('problem_ready', {
+  io.to(gameId).emit('problem_loaded', {
     problem,
     testCases
   });
@@ -425,6 +781,10 @@ function initializeSocket(io) {
         if (game.isFull()) {
           console.log(`Game ${gameId} is full, starting game...`);
           game.startRound();
+          
+          // Start pre-loading problems for future rounds
+          preloadProblemsForGame(gameId, 2);
+          
           io.to(gameId).emit('game_started', {
             currentRound: game.currentRound,
             maxRounds: game.maxRounds,
@@ -489,7 +849,7 @@ function initializeSocket(io) {
       game.currentSolution = solution;
       game.testCases = testCases;
 
-      io.to(gameId).emit('problem_ready', {
+      io.to(gameId).emit('problem_loaded', {
         problem,
         solution,
         testCases: testCases.length // Don't send actual test cases to prevent cheating
