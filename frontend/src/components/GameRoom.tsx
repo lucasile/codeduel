@@ -578,7 +578,7 @@ const GameRoom: React.FC = () => {
                       }}
                     >
                       {lineCorruptionActive ? '🐜 Ant Colony Active' : 
-                       (canUseLineCorruption ? '🐜 Activate Ant Colony' : '� Ant Colony Used')}
+                       (canUseLineCorruption ? '🐜 Activate Ant Colony' : '🐜 Ant Colony Used')}
                     </button>
                     <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#636e72' }}>
                       {lineCorruptionActive ? 'You can edit 2 lines!' : 
