@@ -252,6 +252,12 @@ async function preloadProblemsForGame(gameId, roundsToPreload = 2) {
   const game = games.get(gameId);
   if (!game) return;
   
+  // Skip pre-loading in test mode - we use static test problems
+  if (TEST_MODE) {
+    console.log(`🧪 Test Mode: Skipping pre-loading for game ${gameId} - using static test problems`);
+    return;
+  }
+  
   console.log(`🔄 Pre-loading ${roundsToPreload} problems for game ${gameId}...`);
   
   if (!preloadedProblems.has(gameId)) {
@@ -507,8 +513,9 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
   }
   
   // Production mode: Check if we have pre-loaded problems first
-  const queue = preloadedProblems.get(gameId);
-  if (queue && queue.length > 0) {
+  if (!TEST_MODE) {
+    const queue = preloadedProblems.get(gameId);
+    if (queue && queue.length > 0) {
     console.log(`⚡ Using pre-loaded problem for game ${gameId}`);
     const preloadedData = queue.shift(); // Remove from queue
     
@@ -560,6 +567,7 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
     
     console.log(`✅ Instantly loaded pre-cached problem: "${problem.title}"`);
     return;
+    }
   }
   
   // Fallback to live fetching if no pre-loaded problems
@@ -741,6 +749,7 @@ class GameSession {
     this.currentSolution = '';
     this.buggyCode = '';
     this.testCases = [];
+    this.lineCorruptionUsedThisRound = false; // Track if Line Corruption was used in current round
     this.createdAt = new Date();
     this.io = null; // Will be set when timer starts
   }
@@ -873,6 +882,7 @@ class GameSession {
     this.currentSolution = '';
     this.buggyCode = '';
     this.testCases = [];
+    this.lineCorruptionUsedThisRound = false; // Reset Line Corruption tracking for new round
   }
 
   switchPhase(newPhase) {
@@ -1050,7 +1060,7 @@ function initializeSocket(io) {
         buggyCode,
         lineNumber,
         editedLines,
-        editedLinesCount: 1, // Bug fixer always limited to 1 line for maximum challenge
+        editedLinesCount: game.lineCorruptionUsedThisRound ? 2 : 1, // Dynamic limit based on Line Corruption usage
         phase: 'debugging',
         timeLeft: game.timeLeft,
         debugger: game.currentDebugger
@@ -1062,11 +1072,11 @@ function initializeSocket(io) {
       const game = games.get(gameId);
       if (!game || game.currentDebugger !== socket.id) return;
       
-      // Validate debugger line edit limit (always 1 line for maximum challenge)
-      const allowedLineEdits = 1; // Bug fixer can only edit 1 line, regardless of bug introducer
+      // Validate debugger line edit limit (dynamic based on Line Corruption usage)
+      const allowedLineEdits = game.lineCorruptionUsedThisRound ? 2 : 1;
       if (debuggerEditedLines && debuggerEditedLines.length > allowedLineEdits) {
         socket.emit('error', { 
-          message: `You can only edit ${allowedLineEdits} line to fix this bug! You edited ${debuggerEditedLines.length} lines.` 
+          message: `You can only edit up to ${allowedLineEdits} line${allowedLineEdits > 1 ? 's' : ''} to fix this bug! You edited ${debuggerEditedLines.length} lines.` 
         });
         return;
       }
@@ -1122,6 +1132,9 @@ function initializeSocket(io) {
         if (powerUpType === 'spiderWeb') {
           // Pause timer for 15 seconds
           game.timeLeft += 15;
+        } else if (powerUpType === 'lineCorruption') {
+          // Track that Line Corruption was used this round
+          game.lineCorruptionUsedThisRound = true;
         }
 
         io.to(gameId).emit('powerup_used', {

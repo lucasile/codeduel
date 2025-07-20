@@ -315,9 +315,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           {gamePhase === 'debugging' && isMyTurn && (
             <ActionButton 
               onClick={handleSubmitFix}
-              disabled={editedLines.size !== 1}
+              disabled={editedLines.size === 0 || editedLines.size > (maxEditableLines || 1)}
             >
-              🔧 Submit Fix ({editedLines.size}/1 lines edited)
+              🔧 Submit Fix ({editedLines.size}/{maxEditableLines || 1} lines edited)
             </ActionButton>
           )}
         </div>

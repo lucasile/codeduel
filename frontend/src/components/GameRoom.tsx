@@ -230,6 +230,8 @@ const GameRoom: React.FC = () => {
       setCurrentProblem(null);
       setCurrentSolution('');
       setBuggyCode('');
+      setMaxEditableLines(undefined); // Reset line limit to default (1) for new round
+      setLineCorruptionActive(false); // Reset Line Corruption state for new round
     });
 
     socket.on('round_ready', () => {
@@ -333,8 +335,11 @@ const GameRoom: React.FC = () => {
         return updatedState;
       });
       
-      if (data.powerUpType === 'spiderWeb') {
-        console.log('🕸️ Spider Web activated! +15 seconds added to timer');
+      if (data.powerUpType === 'timeFreeze') {
+        console.log('❄️ Time Freeze activated! +15 seconds added to timer');
+      } else if (data.powerUpType === 'lineCorruption') {
+        console.log('🔥 Line Corruption activated! You can now edit 2 lines.');
+        setLineCorruptionActive(true);
       }
     });
 
