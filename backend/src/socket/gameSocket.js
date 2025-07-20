@@ -1146,7 +1146,7 @@ function initializeSocket(io) {
         game.powerUps[playerKey][powerUpType]--;
 
         if (powerUpType === 'timeFreeze') {
-          // Pause timer for 30 seconds
+          // Increase timer by 30 seconds
           game.timeLeft += 30;
         } else if (powerUpType === 'lineCorruption') {
           // Track that Line Corruption was used this round

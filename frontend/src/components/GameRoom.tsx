@@ -622,7 +622,7 @@ const GameRoom: React.FC = () => {
                         {canUseTimeFreeze ? '🧪 Use Pest Control' : '🧪 Pest Control Used'}
                       </button>
                       <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#636e72' }}>
-                        Pause timer for 30 seconds ({timeFreezeUses} use{timeFreezeUses !== 1 ? 's' : ''} left this game)
+                        Increase timer by 30 seconds ({timeFreezeUses} use{timeFreezeUses !== 1 ? 's' : ''} left this game)
                       </p>
                     </>
                   );

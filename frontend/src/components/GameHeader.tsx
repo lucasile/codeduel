@@ -2,14 +2,7 @@ import React from 'react';
 import styled from 'styled-components';
 
 const HeaderContainer = styled.div`
-        <PowerUpButton
-          available={playerPowerUps.lineCorruption > 0}
-          onClick={() => onUsePowerUp('lineCorruption')}
-          disabled={playerPowerUps.lineCorruption === 0}
-        >
-          🐜 Ant Colony
-          <PowerUpCount>{playerPowerUps.lineCorruption}</PowerUpCount>
-        </PowerUpButton>ound: #2d2d30;
+  background: #2d2d30;
   border-bottom: 1px solid #3e3e42;
   padding: 1rem 2rem;
   display: flex;
