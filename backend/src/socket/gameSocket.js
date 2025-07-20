@@ -742,8 +742,8 @@ class GameSession {
     this.timer = null;
     this.roundWins = { player1: 0, player2: 0 }; // Track round wins instead of points
     this.powerUps = {
-      player1: { antColony: 1, spiderWeb: 1 },
-      player2: { antColony: 1, spiderWeb: 1 }
+      player1: { lineCorruption: 1, timeFreeze: 1 },
+      player2: { lineCorruption: 1, timeFreeze: 1 }
     };
     this.currentProblem = null;
     this.currentSolution = '';
