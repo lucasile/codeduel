@@ -403,7 +403,7 @@ const GameRoom: React.FC = () => {
   if (!isConnected) {
     return (
       <WaitingScreen>
-        <WaitingTitle>🔌 Connecting to server...</WaitingTitle>
+        <WaitingTitle>🔌Connecting to server...</WaitingTitle>
         <LoadingSpinner />
       </WaitingScreen>
     );
