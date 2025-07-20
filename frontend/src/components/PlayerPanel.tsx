@@ -112,7 +112,7 @@ interface Player {
 
 interface PlayerPanelProps {
   players: Player[];
-  scores: { player1: number; player2: number };
+  roundWins: { player1: number; player2: number };
   powerUps: {
     player1: { lineCorruption: number; timeFreeze: number };
     player2: { lineCorruption: number; timeFreeze: number };
@@ -125,7 +125,7 @@ interface PlayerPanelProps {
 
 const PlayerPanel: React.FC<PlayerPanelProps> = ({
   players,
-  scores,
+  roundWins,
   powerUps,
   currentPlayerId,
   bugIntroducer,
@@ -177,7 +177,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
       {players.map((player, index) => {
         const role = getPlayerRole(player.id);
         const playerPowerUps = getPlayerPowerUps(index);
-        const playerScore = index === 0 ? scores.player1 : scores.player2;
+        const playerRoundWins = index === 0 ? roundWins.player1 : roundWins.player2;
         
         return (
           <PlayerCard
@@ -191,7 +191,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
               {role && <RoleIndicator role={role}>{getRoleText(role)}</RoleIndicator>}
             </PlayerName>
             
-            <PlayerScore>{playerScore} pts</PlayerScore>
+            <PlayerScore>{playerRoundWins} rounds won</PlayerScore>
             
             <PowerUpStatus>
               <PowerUpItem>
@@ -208,11 +208,11 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
       })}
 
       <ScoreSection>
-        <ScoreTitle>Scoring</ScoreTitle>
+        <ScoreTitle>Round-Based System</ScoreTitle>
         <div style={{ color: '#d1d5db', fontSize: '0.9rem' }}>
-          <div>• Bug Hunter: +100 pts for successful fix</div>
-          <div>• Bug Introducer: +50 pts if bug not found</div>
-          {/* <div>• Speed Bonus: Extra points for quick fixes</div> */}
+          <div>• First to win 3 rounds wins the game</div>
+          <div>• Debugger wins round by fixing the bug</div>
+          <div>• Bug Introducer wins if time runs out</div>
         </div>
       </ScoreSection>
     </PanelContainer>

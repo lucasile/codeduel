@@ -6,6 +6,7 @@ import CodeEditor from './CodeEditor';
 import GameHeader from './GameHeader';
 import PlayerPanel from './PlayerPanel';
 import ProblemPanel from './ProblemPanel';
+import EndGameScreen from './EndGameScreen';
 
 const GameContainer = styled.div`
   display: flex;
@@ -52,77 +53,6 @@ const WaitingScreen = styled.div`
   background: linear-gradient(135deg, #408c2dff 0%, #164406ff 100%);
 `;
 
-const WinnerScreen = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
-  animation: celebration 2s ease-in-out;
-
-  @keyframes celebration {
-    0% { transform: scale(0.8); opacity: 0; }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); opacity: 1; }
-  }
-`;
-
-const WinnerTitle = styled.h1`
-  color: white;
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-  animation: pulse 2s infinite;
-
-  @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-  }
-`;
-
-const WinnerSubtitle = styled.h2`
-  color: white;
-  font-size: 1.5rem;
-  margin-bottom: 2rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-`;
-
-const FinalScoreDisplay = styled.div`
-  background: rgba(255, 255, 255, 0.2);
-  padding: 2rem;
-  border-radius: 15px;
-  color: white;
-  font-size: 1.3rem;
-  margin-bottom: 3rem;
-  text-align: center;
-  min-width: 300px;
-`;
-
-const PlayAgainButton = styled.button`
-  padding: 1rem 3rem;
-  background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
-  color: white;
-  border: none;
-  border-radius: 50px;
-  cursor: pointer;
-  font-size: 1.2rem;
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(0, 184, 148, 0.4);
-  transition: all 0.3s ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 184, 148, 0.6);
-    background: linear-gradient(135deg, #00a085 0%, #00b894 100%);
-  }
-
-  &:active {
-    transform: translateY(0px);
-  }
-`;
-
 const WaitingTitle = styled.h2`
   color: white;
   font-size: 2rem;
@@ -166,7 +96,7 @@ interface GameState {
   bugIntroducer: string | null;
   debugger: string | null;
   timeLeft: number;
-  scores: { player1: number; player2: number };
+  roundWins: { player1: number; player2: number };
   powerUps: {
     player1: { lineCorruption: number; timeFreeze: number };
     player2: { lineCorruption: number; timeFreeze: number };
@@ -197,35 +127,6 @@ const GameRoom: React.FC = () => {
     });
   }, [currentSolution]);
 
-  // Function to fetch random problem for the game
-  const fetchRandomProblemForGame = async () => {
-    try {
-      console.log('🎲 Fetching random problem for game...');
-      const response = await fetch('/api/game/problem/random');
-      const data = await response.json();
-      
-      if (data.success) {
-        const { problem } = data;
-        
-        // Fetch solution and test cases
-        const [solutionResponse, testCasesResponse] = await Promise.all([
-          fetch(`/api/game/problem/${problem.id}/solution?language=python`),
-          fetch(`/api/game/problem/${problem.id}/testcases`)
-        ]);
-        
-        const solutionData = await solutionResponse.json();
-        const testCasesData = await testCasesResponse.json();
-        
-        if (solutionData.success && testCasesData.success) {
-          handleSubmitProblem(problem, solutionData.solution, testCasesData.testCases);
-          console.log('🎲 Successfully loaded random problem:', problem.title);
-        }
-      }
-    } catch (error) {
-      console.error('🎲 Failed to fetch random problem:', error);
-    }
-  };
-
   useEffect(() => {
     if (!socket || !isConnected || !gameId) {
       console.log('🔌 Socket setup skipped:', { socket: !!socket, isConnected, gameId });
@@ -247,12 +148,12 @@ const GameRoom: React.FC = () => {
         gameId: data.gameId,
         players: data.players,
         currentRound: 0,
-        maxRounds: 3,
+        maxRounds: 4,
         currentPhase: 'waiting' as const,
         bugIntroducer: null,
         debugger: null,
         timeLeft: 180,
-        scores: { player1: 0, player2: 0 },
+        roundWins: { player1: 0, player2: 0 },
         powerUps: {
           player1: { lineCorruption: 1, timeFreeze: 1 },
           player2: { lineCorruption: 1, timeFreeze: 1 }
@@ -364,7 +265,7 @@ const GameRoom: React.FC = () => {
     socket.on('round_complete', (data) => {
       setGameState(prev => prev ? {
         ...prev,
-        scores: data.scores,
+        roundWins: data.roundWins,
         currentPhase: 'validation'
       } : null);
     });
@@ -532,6 +433,21 @@ const GameRoom: React.FC = () => {
     return false;
   };
 
+  // Show end game screen when game is finished
+  if (gameState && gameState.currentPhase === 'finished') {
+    const handlePlayAgain = () => {
+      navigate('/');
+    };
+
+    // Convert round wins to player data for EndGameScreen
+    const playersWithWins = gameState.players.map((player, index) => ({
+      name: player.name,
+      points: index === 0 ? gameState.roundWins.player1 : gameState.roundWins.player2
+    }));
+
+    return <EndGameScreen players={playersWithWins} onPlayAgain={handlePlayAgain} />;
+  }
+
   return (
     <GameContainer>
       {/* Loading Screen Overlay */}
@@ -597,7 +513,7 @@ const GameRoom: React.FC = () => {
         <RightPanel>
           <PlayerPanel
             players={gameState.players}
-            scores={gameState.scores}
+            roundWins={gameState.roundWins}
             powerUps={gameState.powerUps}
             currentPlayerId={playerId}
             bugIntroducer={gameState.bugIntroducer}

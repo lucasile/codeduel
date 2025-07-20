@@ -589,13 +589,13 @@ class GameSession {
     this.id = id;
     this.players = [];
     this.currentRound = 0;
-    this.maxRounds = 3;
+    this.maxRounds = 4; // Best of 4 rounds
     this.currentPhase = 'waiting'; // waiting, bug_introduction, debugging, validation, finished
     this.currentBugIntroducer = null;
     this.currentDebugger = null;
     this.timeLeft = 180; // 3 minutes in seconds
     this.timer = null;
-    this.scores = { player1: 0, player2: 0 };
+    this.roundWins = { player1: 0, player2: 0 }; // Track round wins instead of points
     this.powerUps = {
       player1: { lineCorruption: 1, timeFreeze: 1 },
       player2: { lineCorruption: 1, timeFreeze: 1 }
@@ -641,17 +641,18 @@ class GameSession {
     
     if (this.currentPhase === 'debugging') {
       // Debugger failed to find the bug in time
-      // Award points to bug introducer
+      // Award round win to bug introducer
       const introducerIndex = this.players.findIndex(p => p.id === this.currentBugIntroducer);
       const playerKey = introducerIndex === 0 ? 'player1' : 'player2';
-      this.scores[playerKey] += 50;
+      this.roundWins[playerKey] += 1;
       
       io.to(this.id).emit('round_complete', {
         isCorrect: false,
         timeUp: true,
-        scores: this.scores,
+        roundWins: this.roundWins,
         currentRound: this.currentRound,
-        maxRounds: this.maxRounds
+        maxRounds: this.maxRounds,
+        roundWinner: this.players[introducerIndex].name + ' (Bug Introducer)'
       });
       
       // Check if game is over or start next round
@@ -660,13 +661,26 @@ class GameSession {
   }
   
   checkGameEnd(io) {
-    if (this.currentRound >= this.maxRounds) {
-      const winner = this.scores.player1 > this.scores.player2 ? 
-        this.players[0] : this.players[1];
+    // Check if someone has won majority of rounds (best of 4, so need 3 wins to guarantee win)
+    const player1Wins = this.roundWins.player1;
+    const player2Wins = this.roundWins.player2;
+    
+    // Early win condition: first to 3 rounds wins
+    if (player1Wins >= 3 || player2Wins >= 3 || this.currentRound >= this.maxRounds) {
+      let winner;
+      if (player1Wins > player2Wins) {
+        winner = this.players[0];
+      } else if (player2Wins > player1Wins) {
+        winner = this.players[1];
+      } else {
+        // This should rarely happen with best of 4, but handle tie
+        winner = null; // tie
+      }
       
       io.to(this.id).emit('game_over', {
         winner,
-        finalScores: this.scores
+        finalRoundWins: this.roundWins,
+        totalRounds: this.currentRound
       });
       
       games.delete(this.id);
@@ -917,54 +931,33 @@ function initializeSocket(io) {
       // Later this will use Judge0 API for actual code execution
       const isCorrect = fixedCode.length > 0; // Simplified validation
 
+      let roundWinner;
       if (isCorrect) {
-        // Award points to debugger
+        // Award round win to debugger
         const debuggerIndex = game.players.findIndex(p => p.id === socket.id);
         const playerKey = debuggerIndex === 0 ? 'player1' : 'player2';
-        game.scores[playerKey] += 100; // Base points for successful debug
+        game.roundWins[playerKey] += 1;
+        roundWinner = game.players[debuggerIndex].name + ' (Debugger)';
       } else {
-        // Award points to bug introducer
+        // Award round win to bug introducer
         const introducerIndex = game.players.findIndex(p => p.id === game.currentBugIntroducer);
         const playerKey = introducerIndex === 0 ? 'player1' : 'player2';
-        game.scores[playerKey] += 50;
+        game.roundWins[playerKey] += 1;
+        roundWinner = game.players[introducerIndex].name + ' (Bug Introducer)';
       }
 
       io.to(gameId).emit('round_complete', {
         isCorrect,
         fixedCode,
         foundBugLine,
-        scores: game.scores,
+        roundWins: game.roundWins,
         currentRound: game.currentRound,
-        maxRounds: game.maxRounds
+        maxRounds: game.maxRounds,
+        roundWinner: roundWinner
       });
 
-      // Check if game is over
-      if (game.currentRound >= game.maxRounds) {
-        const winner = game.scores.player1 > game.scores.player2 ? 
-          game.players[0] : game.players[1];
-        
-        io.to(gameId).emit('game_over', {
-          winner,
-          finalScores: game.scores
-        });
-        
-        games.delete(gameId);
-      } else {
-        // Start next round
-        setTimeout(() => {
-          game.startRound();
-          io.to(gameId).emit('new_round', {
-            currentRound: game.currentRound,
-            bugIntroducer: game.currentBugIntroducer,
-            debugger: game.currentDebugger,
-            phase: game.currentPhase,
-            timeLeft: game.timeLeft
-          });
-          
-          // Fetch a fresh problem for the new round
-          fetchAndSendProblem(gameId, io);
-        }, 3000); // 3 second break between rounds
-      }
+      // Check if game is over or start next round
+      game.checkGameEnd(io);
     });
 
     // Handle power-up usage
