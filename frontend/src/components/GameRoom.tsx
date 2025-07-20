@@ -98,8 +98,8 @@ interface GameState {
   timeLeft: number;
   roundWins: { player1: number; player2: number };
   powerUps: {
-    player1: { lineCorruption: number; timeFreeze: number };
-    player2: { lineCorruption: number; timeFreeze: number };
+    player1: { antColony: number; spiderWeb: number };
+    player2: { antColony: number; spiderWeb: number };
   };
 }
 
@@ -155,8 +155,8 @@ const GameRoom: React.FC = () => {
         timeLeft: 180,
         roundWins: { player1: 0, player2: 0 },
         powerUps: {
-          player1: { lineCorruption: 1, timeFreeze: 1 },
-          player2: { lineCorruption: 1, timeFreeze: 1 }
+          player1: { antColony: 1, spiderWeb: 1 },
+          player2: { antColony: 1, spiderWeb: 1 }
         }
       };
       console.log('🔌 Setting initial gameState:', initialState);
@@ -325,8 +325,8 @@ const GameRoom: React.FC = () => {
         return updatedState;
       });
       
-      if (data.powerUpType === 'timeFreeze') {
-        console.log('❄️ Time Freeze activated! +15 seconds added to timer');
+      if (data.powerUpType === 'spiderWeb') {
+        console.log('🕸️ Spider Web activated! +15 seconds added to timer');
       }
     });
 
@@ -391,7 +391,7 @@ const GameRoom: React.FC = () => {
     });
   };
 
-  const handleUsePowerUp = (powerUpType: 'lineCorruption' | 'timeFreeze') => {
+  const handleUsePowerUp = (powerUpType: 'antColony' | 'spiderWeb') => {
     if (!socket || !gameId) return;
     
     socket.emit('use_powerup', {
@@ -526,82 +526,82 @@ const GameRoom: React.FC = () => {
             <div style={{ marginTop: '20px', padding: '15px', border: '2px solid #ff6b6b', borderRadius: '8px', backgroundColor: '#ffe0e0' }}>
               <h4 style={{ margin: '0 0 10px 0', color: '#d63031' }}>⚡ Power-ups</h4>
               
-              {/* Line Corruption - Bug Introducer Only */}
+              {/* Ant Colony - Bug Introducer Only */}
               {gameState.currentPhase === 'bug_introduction' && (() => {
                 const playerIndex = gameState.players.findIndex(p => p.id === playerId);
                 const playerKey = playerIndex === 0 ? 'player1' : 'player2';
-                const lineCorruptionUses = gameState.powerUps[playerKey]?.lineCorruption || 0;
-                const canUseLineCorruption = lineCorruptionUses > 0 && !lineCorruptionActive;
+                const antColonyUses = gameState.powerUps[playerKey]?.antColony || 0;
+                const canUseAntColony = antColonyUses > 0 && !lineCorruptionActive;
                 
                 return (
                   <div style={{ marginBottom: '10px' }}>
                     <button 
                       onClick={() => {
-                        if (canUseLineCorruption) {
-                          handleUsePowerUp('lineCorruption');
+                        if (canUseAntColony) {
+                          handleUsePowerUp('antColony');
                           setLineCorruptionActive(true);
                         } else if (lineCorruptionActive) {
                           setLineCorruptionActive(false);
                         }
                       }}
-                      disabled={lineCorruptionUses === 0 && !lineCorruptionActive}
+                      disabled={antColonyUses === 0 && !lineCorruptionActive}
                       style={{
                         padding: '8px 12px',
-                        backgroundColor: lineCorruptionActive ? '#00b894' : (canUseLineCorruption ? '#fd79a8' : '#95a5a6'),
+                        backgroundColor: lineCorruptionActive ? '#00b894' : (canUseAntColony ? '#fd79a8' : '#95a5a6'),
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
-                        cursor: (canUseLineCorruption || lineCorruptionActive) ? 'pointer' : 'not-allowed',
+                        cursor: (canUseAntColony || lineCorruptionActive) ? 'pointer' : 'not-allowed',
                         fontSize: '14px',
                         width: '100%',
-                        opacity: (canUseLineCorruption || lineCorruptionActive) ? 1 : 0.6
+                        opacity: (canUseAntColony || lineCorruptionActive) ? 1 : 0.6
                       }}
                     >
-                      {lineCorruptionActive ? '✅ Line Corruption Active' : 
-                       (canUseLineCorruption ? '💥 Activate Line Corruption' : '💥 Line Corruption Used')}
+                      {lineCorruptionActive ? '🐜 Ant Colony Active' : 
+                       (canUseAntColony ? '� Activate Ant Colony' : '� Ant Colony Used')}
                     </button>
                     <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#636e72' }}>
                       {lineCorruptionActive ? 'You can edit 2 lines!' : 
-                       `Edit 2 lines instead of 1 (${lineCorruptionUses} use${lineCorruptionUses !== 1 ? 's' : ''} left this game)`}
+                       `Edit 2 lines instead of 1 (${antColonyUses} use${antColonyUses !== 1 ? 's' : ''} left this game)`}
                     </p>
                   </div>
                 );
               })()}
               
-              {/* Time Freeze - Both Phases */}
+              {/* Spider Web - Both Phases */}
               <div>
                 {(() => {
                   const playerIndex = gameState.players.findIndex(p => p.id === playerId);
                   const playerKey = playerIndex === 0 ? 'player1' : 'player2';
-                  const timeFreezeUses = gameState.powerUps[playerKey]?.timeFreeze || 0;
-                  const canUseTimeFreeze = timeFreezeUses > 0;
+                  const spiderWebUses = gameState.powerUps[playerKey]?.spiderWeb || 0;
+                  const canUseSpiderWeb = spiderWebUses > 0;
                   
                   return (
                     <>
                       <button 
                         onClick={() => {
-                          if (canUseTimeFreeze) {
-                            handleUsePowerUp('timeFreeze');
-                            console.log('❄️ Time Freeze button clicked - calling backend');
+                          if (canUseSpiderWeb) {
+                            handleUsePowerUp('spiderWeb');
+                            console.log('🕸️ Spider Web button clicked - calling backend');
                           }
                         }}
-                        disabled={!canUseTimeFreeze}
+                        disabled={!canUseSpiderWeb}
                         style={{
                           padding: '8px 12px',
-                          backgroundColor: canUseTimeFreeze ? '#74b9ff' : '#95a5a6',
+                          backgroundColor: canUseSpiderWeb ? '#74b9ff' : '#95a5a6',
                           color: 'white',
                           border: 'none',
                           borderRadius: '4px',
-                          cursor: canUseTimeFreeze ? 'pointer' : 'not-allowed',
+                          cursor: canUseSpiderWeb ? 'pointer' : 'not-allowed',
                           fontSize: '14px',
                           width: '100%',
-                          opacity: canUseTimeFreeze ? 1 : 0.6
+                          opacity: canUseSpiderWeb ? 1 : 0.6
                         }}
                       >
-                        {canUseTimeFreeze ? '❄️ Use Time Freeze' : '❄️ Time Freeze Used'}
+                        {canUseSpiderWeb ? '🕸️ Use Spider Web' : '🕸️ Spider Web Used'}
                       </button>
                       <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#636e72' }}>
-                        Pause timer for 15 seconds ({timeFreezeUses} use{timeFreezeUses !== 1 ? 's' : ''} left this game)
+                        Pause timer for 15 seconds ({spiderWebUses} use{spiderWebUses !== 1 ? 's' : ''} left this game)
                       </p>
                     </>
                   );

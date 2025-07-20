@@ -114,8 +114,8 @@ interface PlayerPanelProps {
   players: Player[];
   roundWins: { player1: number; player2: number };
   powerUps: {
-    player1: { lineCorruption: number; timeFreeze: number };
-    player2: { lineCorruption: number; timeFreeze: number };
+    player1: { antColony: number; spiderWeb: number };
+    player2: { antColony: number; spiderWeb: number };
   };
   currentPlayerId: string;
   bugIntroducer: string | null;
@@ -195,12 +195,12 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
             
             <PowerUpStatus>
               <PowerUpItem>
-                <span>🔥 Line Corruption:</span>
-                <span>{playerPowerUps.lineCorruption}</span>
+                <span>� Ant Colony:</span>
+                <span>{playerPowerUps.antColony}</span>
               </PowerUpItem>
               <PowerUpItem>
-                <span>❄️ Time Freeze:</span>
-                <span>{playerPowerUps.timeFreeze}</span>
+                <span>🕸️ Spider Web:</span>
+                <span>{playerPowerUps.spiderWeb}</span>
               </PowerUpItem>
             </PowerUpStatus>
           </PlayerCard>

@@ -194,7 +194,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }
     
     if (editedLinesArray.length > maxAllowedLines) {
-      const powerUpText = lineCorruptionActive ? '' : ' Use the Line Corruption power-up to edit 2 lines.';
+      const powerUpText = lineCorruptionActive ? '' : ' Use the Ant Colony power-up to edit 2 lines.';
       alert(`⚠️ You can only edit ${maxAllowedLines} line(s) at a time.${powerUpText}`);
       return;
     }
@@ -283,7 +283,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         <div>
           {gamePhase === 'bug_introduction' && isMyTurn && (
             <DangerButton onClick={handleIntroduceBug}>
-              🐛 Introduce Bug ({editedLines.size}/{lineCorruptionActive ? 2 : 1} lines edited)
+              � Introduce Bug ({editedLines.size}/{lineCorruptionActive ? 2 : 1} lines edited)
             </DangerButton>
           )}
           

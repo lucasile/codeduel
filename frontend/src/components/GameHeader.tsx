@@ -68,8 +68,8 @@ interface GameState {
   maxRounds: number;
   timeLeft: number;
   powerUps: {
-    player1: { lineCorruption: number; timeFreeze: number };
-    player2: { lineCorruption: number; timeFreeze: number };
+    player1: { antColony: number; spiderWeb: number };
+    player2: { antColony: number; spiderWeb: number };
   };
   players: Array<{ id: string; name: string }>;
 }
@@ -77,7 +77,7 @@ interface GameState {
 interface GameHeaderProps {
   gameState: GameState;
   playerId: string;
-  onUsePowerUp: (powerUpType: 'lineCorruption' | 'timeFreeze') => void;
+  onUsePowerUp: (powerUpType: 'antColony' | 'spiderWeb') => void;
 }
 
 const GameHeader: React.FC<GameHeaderProps> = ({ gameState, playerId, onUsePowerUp }) => {
@@ -107,21 +107,21 @@ const GameHeader: React.FC<GameHeaderProps> = ({ gameState, playerId, onUsePower
 
       <PowerUpContainer>
         <PowerUpButton
-          available={playerPowerUps.lineCorruption > 0}
-          onClick={() => onUsePowerUp('lineCorruption')}
-          disabled={playerPowerUps.lineCorruption === 0}
+          available={playerPowerUps.antColony > 0}
+          onClick={() => onUsePowerUp('antColony')}
+          disabled={playerPowerUps.antColony === 0}
         >
-          🔥 Line Corruption
-          <PowerUpCount>{playerPowerUps.lineCorruption}</PowerUpCount>
+          � Ant Colony
+          <PowerUpCount>{playerPowerUps.antColony}</PowerUpCount>
         </PowerUpButton>
         
         <PowerUpButton
-          available={playerPowerUps.timeFreeze > 0}
-          onClick={() => onUsePowerUp('timeFreeze')}
-          disabled={playerPowerUps.timeFreeze === 0}
+          available={playerPowerUps.spiderWeb > 0}
+          onClick={() => onUsePowerUp('spiderWeb')}
+          disabled={playerPowerUps.spiderWeb === 0}
         >
-          ❄️ Time Freeze
-          <PowerUpCount>{playerPowerUps.timeFreeze}</PowerUpCount>
+          🕸️ Spider Web
+          <PowerUpCount>{playerPowerUps.spiderWeb}</PowerUpCount>
         </PowerUpButton>
       </PowerUpContainer>
     </HeaderContainer>
