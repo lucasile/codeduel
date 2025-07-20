@@ -738,7 +738,7 @@ class GameSession {
     this.currentPhase = 'waiting'; // waiting, bug_introduction, debugging, validation, finished
     this.currentBugIntroducer = null;
     this.currentDebugger = null;
-    this.timeLeft = 180; // 3 minutes in seconds
+    this.timeLeft = 90; // 1 minute 30 seconds
     this.timer = null;
     this.roundWins = { player1: 0, player2: 0 }; // Track round wins instead of points
     this.powerUps = {
@@ -867,7 +867,7 @@ class GameSession {
   startRound() {
     this.currentRound++;
     this.currentPhase = 'bug_introduction';
-    this.timeLeft = 180;
+    this.timeLeft = 90;
     
     // Alternate who introduces bugs
     const introducerIndex = (this.currentRound - 1) % 2;
@@ -888,7 +888,7 @@ class GameSession {
   switchPhase(newPhase) {
     this.currentPhase = newPhase;
     if (newPhase === 'debugging') {
-      this.timeLeft = 180; // Reset timer for debugging phase
+      this.timeLeft = 90; // Reset timer for debugging phase
     }
   }
 }
@@ -1050,7 +1050,7 @@ function initializeSocket(io) {
       game.editedLines = editedLines;
       game.editedLinesCount = editedLines.length; // Track number of lines edited for debugger limit
       game.currentPhase = 'debugging';
-      game.timeLeft = 180; // 3 minutes for debugging
+      game.timeLeft = 90; // 1 minute 30 seconds for debugging
       game.startTimer(io);
       
       console.log(`🐛 Bug introduced in game ${gameId} on ${editedLines.length} line(s):`, editedLines);
@@ -1129,9 +1129,9 @@ function initializeSocket(io) {
       if (game.powerUps[playerKey][powerUpType] > 0) {
         game.powerUps[playerKey][powerUpType]--;
 
-        if (powerUpType === 'spiderWeb') {
-          // Pause timer for 15 seconds
-          game.timeLeft += 15;
+        if (powerUpType === 'timeFreeze') {
+          // Pause timer for 30 seconds
+          game.timeLeft += 30;
         } else if (powerUpType === 'lineCorruption') {
           // Track that Line Corruption was used this round
           game.lineCorruptionUsedThisRound = true;

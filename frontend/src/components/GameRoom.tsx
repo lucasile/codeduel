@@ -154,7 +154,7 @@ const GameRoom: React.FC = () => {
         currentPhase: 'waiting' as const,
         bugIntroducer: null,
         debugger: null,
-        timeLeft: 180,
+        timeLeft: 90,
         roundWins: { player1: 0, player2: 0 },
         powerUps: {
           player1: { lineCorruption: 1, timeFreeze: 1 },
@@ -336,7 +336,7 @@ const GameRoom: React.FC = () => {
       });
       
       if (data.powerUpType === 'timeFreeze') {
-        console.log('🧪 Pest Control activated! +15 seconds added to timer');
+        console.log('🧪 Pest Control activated! +30 seconds added to timer');
       } else if (data.powerUpType === 'lineCorruption') {
         console.log('� Ant Colony activated! You can now edit 2 lines.');
         setLineCorruptionActive(true);
@@ -617,7 +617,7 @@ const GameRoom: React.FC = () => {
                         {canUseTimeFreeze ? '🧪 Use Pest Control' : '🧪 Pest Control Used'}
                       </button>
                       <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#636e72' }}>
-                        Pause timer for 15 seconds ({timeFreezeUses} use{timeFreezeUses !== 1 ? 's' : ''} left this game)
+                        Pause timer for 30 seconds ({timeFreezeUses} use{timeFreezeUses !== 1 ? 's' : ''} left this game)
                       </p>
                     </>
                   );
