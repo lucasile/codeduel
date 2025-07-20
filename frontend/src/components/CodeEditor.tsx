@@ -308,7 +308,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         <div>
           {gamePhase === 'bug_introduction' && isMyTurn && (
             <DangerButton onClick={handleIntroduceBug}>
-              � Introduce Bug ({editedLines.size}/{lineCorruptionActive ? 2 : 1} lines edited)
+              🪳 Introduce Bug ({editedLines.size}/{lineCorruptionActive ? 2 : 1} lines edited)
             </DangerButton>
           )}
           
