@@ -5,6 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import CodeEditor from './CodeEditor';
 import GameHeader from './GameHeader';
 import PlayerPanel from './PlayerPanel';
+import TestResults from './TestResults';
 import ProblemPanel from './ProblemPanel';
 import EndGameScreen from './EndGameScreen';
 
@@ -119,6 +120,8 @@ const GameRoom: React.FC = () => {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [bugIntroducerEditedLines, setBugIntroducerEditedLines] = useState<number[]>([]);
   const [maxEditableLines, setMaxEditableLines] = useState<number | undefined>(undefined);
+  const [testResults, setTestResults] = useState<any>(null);
+  const [showTestResults, setShowTestResults] = useState(false);
 
   // Debug: Track currentSolution changes
   useEffect(() => {
@@ -272,7 +275,66 @@ const GameRoom: React.FC = () => {
       } : null);
     });
 
+    // Handle validation events from Judge0 integration
+    socket.on('validation_started', (data) => {
+      console.log('🧪 Validation started:', data.message);
+      setIsRoundLoading(true);
+      setLoadingMessage(data.message);
+      setGameState(prev => prev ? {
+        ...prev,
+        currentPhase: data.phase
+      } : null);
+    });
+
+    socket.on('validation_loading', (data) => {
+      console.log('⏳ Validation loading:', data.message);
+      setLoadingMessage(data.message);
+    });
+
+    socket.on('problem_loaded', (data) => {
+      console.log('✅ Problem loaded for new round:', data);
+      
+      // Auto-close test results popup when starting new round
+      setShowTestResults(false);
+      setTestResults(null);
+      
+      setCurrentProblem(data.problem);
+      setCurrentSolution(data.solution || '');
+      setBuggyCode('');
+      
+      // Reset line edit tracking for new round
+      setBugIntroducerEditedLines([]);
+      setMaxEditableLines(undefined);
+      
+      // Only clear loading overlay if we have both problem and solution
+      if (data.problem && data.solution) {
+        console.log('✅ Both problem and solution ready, clearing loading overlay');
+        setIsRoundLoading(false);
+        setLoadingMessage('');
+      } else {
+        console.log('⏳ Problem loaded but waiting for solution...');
+        setLoadingMessage('Loading solution...');
+      }
+      
+      setGameState(prev => prev ? {
+        ...prev,
+        currentPhase: 'bug_introduction',
+        currentRound: data.currentRound
+      } : null);
+    });
+
     socket.on('round_complete', (data) => {
+      console.log('✅ Round complete:', data);
+      setIsRoundLoading(false);
+      setLoadingMessage('');
+      
+      // Show test results if available
+      if (data.testResults) {
+        console.log('📊 Test Results:', data.testResults.summary);
+        setTestResults(data.testResults);
+        setShowTestResults(true);
+      }
+      
       setGameState(prev => prev ? {
         ...prev,
         roundWins: data.roundWins,
@@ -632,6 +694,15 @@ const GameRoom: React.FC = () => {
           )}
         </RightPanel>
       </GameContent>
+      
+      {/* Test Results Modal */}
+      {testResults && (
+        <TestResults
+          results={testResults}
+          isVisible={showTestResults}
+          onClose={() => setShowTestResults(false)}
+        />
+      )}
     </GameContainer>
   );
 };
