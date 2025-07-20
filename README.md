@@ -20,7 +20,6 @@ A competitive 1v1 coding game where players take turns introducing bugs and fixi
 - **Real-time communication** via Socket.io
 - **Code execution** via Judge0 API integration
 - **Problem generation** via Vellum AI streaming workflows
-- **LeetCode integration** for curated problem sets
 - **Game session management** with first-to-3 win logic
 
 ### Frontend (React + TypeScript)
