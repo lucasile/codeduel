@@ -15,7 +15,10 @@ console.log(`🧪 Test Mode: ${TEST_MODE ? 'ENABLED' : 'DISABLED'} - ${TEST_MODE
 const solutionCache = new Map();
 
 // Pre-loaded problems queue for instant round transitions
-const preloadedProblems = new Map(); // gameId -> [problem1, problem2, ...]
+const preloadedProblems = new Map(); // gameId -> array of {problem, solution, tests}
+
+// Track active preloading operations to prevent infinite loops
+const activePreloading = new Set();
 
 // Test mode problem counter for cycling through test problems
 const testProblemCounters = new Map(); // gameId -> currentIndex
@@ -90,13 +93,34 @@ async function generateSolutionAndTests(problemHtml, problemId = null, onSolutio
     let solutionReceived = false;
     let testsReceived = false;
     
-    // Process streaming response
+    // Process streaming response with timeout protection
     console.log('🔍 Starting to process Vellum stream...');
     let streamItemCount = 0;
+    const maxStreamItems = 200; // Prevent infinite streaming
+    const streamStartTime = Date.now();
+    const maxStreamTime = 60000; // 60 seconds max
     
     for await (const item of response) {
       streamItemCount++;
-      console.log(`🔍 Vellum stream item ${streamItemCount}:`, JSON.stringify(item, null, 2));
+      const streamDuration = Date.now() - streamStartTime;
+      
+      // Safety checks to prevent infinite streaming
+      if (streamItemCount > maxStreamItems) {
+        console.log(`⚠️ Stream exceeded ${maxStreamItems} items, breaking to prevent infinite loop`);
+        break;
+      }
+      
+      if (streamDuration > maxStreamTime) {
+        console.log(`⚠️ Stream exceeded ${maxStreamTime/1000}s, breaking to prevent timeout`);
+        break;
+      }
+      
+      // Log every 10th item to reduce spam, or important items
+      if (streamItemCount % 10 === 0 || item.data?.state === 'FULFILLED' || item.data?.output?.state === 'FULFILLED') {
+        console.log(`🔍 Vellum stream item ${streamItemCount} (${Math.round(streamDuration/1000)}s):`, JSON.stringify(item, null, 2));
+      } else {
+        console.log(`🔍 Stream item ${streamItemCount}: ${item.data?.state || 'unknown'} - ${item.data?.output?.name || 'no output'} (${item.data?.output?.state || 'no state'})`);
+      }
       
       // Check for individual output (streaming items)
       if (item.data && item.data.output && item.data.output.state === 'FULFILLED') {
@@ -201,32 +225,63 @@ async function triggerContinuousPreloading(gameId, io) {
   const game = games.get(gameId);
   if (!game) return;
   
-  // Check current queue size
-  const queue = preloadedProblems.get(gameId) || [];
-  const totalRounds = game.totalRounds || 3; // Default to 3 rounds
-  const currentRound = game.currentRound || 1;
-  
-  // Calculate max problems we should have (never exceed total rounds)
-  const remainingRounds = totalRounds - currentRound;
-  const maxProblemsNeeded = Math.min(remainingRounds, 2); // Keep 2 ahead, but never exceed remaining rounds
-  
-  if (queue.length >= maxProblemsNeeded || remainingRounds <= 0) {
-    console.log(`⚡ Queue has ${queue.length} problems, remaining rounds: ${remainingRounds}, skipping pre-load`);
+  // Prevent infinite loops - check if already preloading for this game
+  if (activePreloading.has(gameId)) {
+    console.log(`⚡ Already preloading for game ${gameId}, skipping to prevent infinite loop`);
     return;
   }
   
-  const problemsToAdd = maxProblemsNeeded - queue.length;
-  console.log(`🔄 Continuous pre-loading: Adding ${problemsToAdd} problems to queue (current: ${queue.length}, remaining rounds: ${remainingRounds})`);
+  // Check current queue size
+  const queue = preloadedProblems.get(gameId) || [];
   
-  // Pre-load problems in background (non-blocking)
-  if (TEST_MODE) {
-    // Test mode: Pre-load test problems instantly
-    preloadTestProblems(gameId, problemsToAdd);
-  } else {
-    // Production mode: Pre-load from LeetCode + Vellum
-    preloadProblemsForGame(gameId, problemsToAdd).catch(error => {
-      console.error('❌ Error in continuous pre-loading:', error);
-    });
+  console.log(`🔍 Continuous preloading check for game ${gameId}:`);
+  console.log(`   - Current queue length: ${queue.length}`);
+  console.log(`   - Queue contents: ${queue.map(p => p.problem?.title || 'unknown').join(', ')}`);
+  
+  // Check if game could potentially continue (first-to-3 win condition)
+  const player1Wins = game.roundWins?.player1 || 0;
+  const player2Wins = game.roundWins?.player2 || 0;
+  const maxWins = Math.max(player1Wins, player2Wins);
+  
+  console.log(`   - Current wins: P1=${player1Wins}, P2=${player2Wins}, max=${maxWins}`);
+  
+  // Game ends when someone reaches 3 wins, so stop preloading if we're close to ending
+  if (maxWins >= 3) {
+    console.log(`⚡ Game ending soon (max wins: ${maxWins}), skipping pre-load`);
+    return;
+  }
+  
+  // Only preload 1 problem at a time, and only if we don't already have one queued
+  if (queue.length >= 1) {
+    console.log(`⚡ Queue has ${queue.length} problems, skipping pre-load (first-to-3 format)`);
+    console.log(`   - Existing problems: ${queue.map(p => p.problem?.title || 'unknown').join(', ')}`);
+    return;
+  }
+  
+  console.log(`✅ Queue is empty (${queue.length}), proceeding with preloading...`);
+  
+  const problemsToAdd = 1; // Always add just 1 problem at a time
+  console.log(`🔄 Sequential pre-loading: Adding ${problemsToAdd} problem to queue (current wins: ${player1Wins}-${player2Wins}, max: ${maxWins})`);
+  
+  
+  // Mark this game as actively preloading
+  activePreloading.add(gameId);
+  
+  try {
+    // Pre-load problems in background (non-blocking)
+    if (TEST_MODE) {
+      // Test mode: Pre-load test problems instantly
+      preloadTestProblems(gameId, problemsToAdd);
+    } else {
+      // Production mode: Pre-load from LeetCode + Vellum
+      await preloadProblemsForGame(gameId, problemsToAdd);
+    }
+  } catch (error) {
+    console.error('❌ Error in continuous pre-loading:', error);
+  } finally {
+    // Always clear the active preloading flag
+    activePreloading.delete(gameId);
+    console.log(`✅ Cleared preloading flag for game ${gameId}`);
   }
 }
 
@@ -247,6 +302,27 @@ function preloadTestProblems(gameId, problemsToAdd) {
   console.log(`✅ Test Mode: Pre-loaded ${problemsToAdd} problems instantly`);
 }
 
+// Curated list of free LeetCode problems (guaranteed to be available)
+const CURATED_PROBLEMS = [
+  1,   // Two Sum
+  2,   // Add Two Numbers
+  3,   // Longest Substring Without Repeating Characters
+  7,   // Reverse Integer
+  9,   // Palindrome Number
+  13,  // Roman to Integer
+  14,  // Longest Common Prefix
+  26,  // Remove Duplicates from Sorted Array
+  27,  // Remove Element
+  28,  // Find the Index of the First Occurrence in a String
+  121, // Best Time to Buy and Sell Stock
+  136, // Single Number
+  148, // Sort List
+  198  // House Robber
+];
+
+// Track used problems per game to avoid duplicates
+const usedProblemsPerGame = new Map();
+
 // Pre-load problems for future rounds to eliminate wait time
 async function preloadProblemsForGame(gameId, roundsToPreload = 2) {
   const game = games.get(gameId);
@@ -264,53 +340,70 @@ async function preloadProblemsForGame(gameId, roundsToPreload = 2) {
     preloadedProblems.set(gameId, []);
   }
   
-  const queue = preloadedProblems.get(gameId);
+  if (!usedProblemsPerGame.has(gameId)) {
+    usedProblemsPerGame.set(gameId, new Set());
+  }
   
-  // Pre-load problems in background
-  for (let i = 0; i < roundsToPreload; i++) {
+  const queue = preloadedProblems.get(gameId);
+  const usedProblems = usedProblemsPerGame.get(gameId);
+  
+  // Get available problems (not used in this game yet)
+  const availableProblems = CURATED_PROBLEMS.filter(id => !usedProblems.has(id));
+  
+  if (availableProblems.length === 0) {
+    console.log('⚠️ Warning: All curated problems have been used in this game. Resetting used problems list.');
+    usedProblems.clear();
+    availableProblems.push(...CURATED_PROBLEMS);
+  }
+  
+  // Pre-load problems in background with retry logic
+  let successfulPreloads = 0;
+  let attempts = 0;
+  const maxAttempts = Math.min(roundsToPreload * 3, availableProblems.length); // Limit attempts
+  
+  while (successfulPreloads < roundsToPreload && attempts < maxAttempts && availableProblems.length > 0) {
+    attempts++;
     try {
-      // Fetch random problem with error handling
-      const randomResponse = await fetch(`${LEETCODE_API_BASE_URL}/random`);
+      console.log(`🔄 Preload attempt ${attempts} (${successfulPreloads}/${roundsToPreload} successful)`);
       
-      // Check if response is OK and contains JSON
-      if (!randomResponse.ok) {
-        console.log('⚠️ LeetCode API returned error status:', randomResponse.status);
-        continue;
-      }
+      // Pick random problem from curated list
+      const randomIndex = Math.floor(Math.random() * availableProblems.length);
+      const problemId = availableProblems[randomIndex];
+      availableProblems.splice(randomIndex, 1); // Remove from available list
       
-      const randomText = await randomResponse.text();
-      if (randomText.startsWith('<!DOCTYPE') || randomText.startsWith('<html')) {
-        console.log('⚠️ LeetCode API returned HTML instead of JSON, skipping preload');
-        continue;
-      }
+      console.log(`🎲 Selected curated problem ID: ${problemId}`);
       
-      const randomData = JSON.parse(randomText);
+      // Comment out the old random API call
+      // const randomResponse = await fetch(`${LEETCODE_API_BASE_URL}/random`);
+      // const randomData = JSON.parse(await randomResponse.text());
       
-      if (!randomData || !randomData.frontend_id) {
-        console.log('⚠️ Invalid random problem data, skipping preload');
-        continue;
-      }
+      // Use the selected problem ID directly
       
       // Get full problem details with error handling
-      const problemResponse = await fetch(`${LEETCODE_API_BASE_URL}/problem/${randomData.frontend_id}`);
+      const problemResponse = await fetch(`${LEETCODE_API_BASE_URL}/problem/${problemId}`);
       
       if (!problemResponse.ok) {
-        console.log('⚠️ Problem API returned error status:', problemResponse.status);
+        console.log('⚠️ Problem API returned error status:', problemResponse.status, '- retrying...');
         continue;
       }
       
       const problemText = await problemResponse.text();
       if (problemText.startsWith('<!DOCTYPE') || problemText.startsWith('<html')) {
-        console.log('⚠️ Problem API returned HTML instead of JSON, skipping preload');
+        console.log('⚠️ Problem API returned HTML instead of JSON - retrying...');
         continue;
       }
       
       const leetcodeProblem = JSON.parse(problemText);
       
-      if (!leetcodeProblem || !leetcodeProblem.content || leetcodeProblem.isPaidOnly) {
-        console.log('⚠️ Premium or invalid problem, skipping preload');
+      if (!leetcodeProblem || !leetcodeProblem.content) {
+        console.log(`⚠️ Invalid problem data for ID ${problemId}: ${leetcodeProblem?.title || 'unknown'} - retrying...`);
         continue;
       }
+      
+      // Mark this problem as used in this game
+      usedProblems.add(problemId);
+      console.log(`📝 Marked problem ${problemId} as used for game ${gameId}`);
+      console.log(`📊 Used problems in this game: [${Array.from(usedProblems).join(', ')}]`);
       
       const problem = {
         id: leetcodeProblem.id,
@@ -331,18 +424,21 @@ async function preloadProblemsForGame(gameId, roundsToPreload = 2) {
         preloaded: true
       });
       
-      console.log(`✅ Pre-loaded problem: ${problem.title}`);
+      successfulPreloads++;
+      console.log(`✅ Pre-loaded problem ${successfulPreloads}/${roundsToPreload}: ${problem.title}`);
       
     } catch (error) {
-      console.error('❌ Error pre-loading problem:', error);
+      console.error('❌ Error pre-loading problem (attempt ${attempts}):', error);
     }
   }
   
-  console.log(`🎯 Pre-loaded ${queue.length} problems for game ${gameId}`);
+  console.log(`🎯 Pre-loading completed: ${successfulPreloads}/${roundsToPreload} problems loaded after ${attempts} attempts`);
   
   // If we couldn't pre-load any problems, log a warning but continue
-  if (queue.length === 0) {
-    console.log('⚠️ Warning: Could not pre-load any problems. Game will use live fetching.');
+  if (successfulPreloads === 0) {
+    console.log('⚠️ Warning: Could not pre-load any problems after ${maxAttempts} attempts. Game will use live fetching.');
+  } else if (successfulPreloads < roundsToPreload) {
+    console.log(`⚠️ Warning: Only pre-loaded ${successfulPreloads}/${roundsToPreload} problems after ${maxAttempts} attempts.`);
   }
 }
 
@@ -504,9 +600,6 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
       // Clear loading overlay immediately
       io.to(gameId).emit('round_ready');
       
-      // Trigger continuous pre-loading for next round
-      triggerContinuousPreloading(gameId, io);
-      
       console.log(`✅ Test Mode: Generated and sent problem "${problem.title}" instantly`);
       return;
     }
@@ -541,24 +634,24 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
           gamePhase: game.phase
         });
         
-        const bugIntroducer = game.players.find(p => p.role === 'bug_introducer');
-        console.log('🔍 Found bug introducer:', bugIntroducer);
-        
-        if (bugIntroducer) {
-          console.log('📤 Emitting solution_ready to:', bugIntroducer.socketId);
-          io.to(bugIntroducer.socketId).emit('solution_ready', { solution: solutionReady });
+        // Send solution immediately to bug introducer using currentBugIntroducer ID
+        if (game.currentBugIntroducer) {
+          console.log('📤 Emitting solution_ready to bug introducer:', game.currentBugIntroducer);
+          io.to(game.currentBugIntroducer).emit('solution_ready', { solution: solutionReady });
         } else {
-          console.log('❌ Bug introducer not found! Trying currentBugIntroducer...');
-          if (game.currentBugIntroducer) {
-            console.log('📤 Emitting solution_ready to currentBugIntroducer:', game.currentBugIntroducer);
-            io.to(game.currentBugIntroducer).emit('solution_ready', { solution: solutionReady });
-          }
+          console.log('❌ No currentBugIntroducer found in game state!');
         }
         // Clear loading overlay as soon as solution is ready
         io.to(gameId).emit('round_ready');
       },
       (testsReady) => {
+        console.log(`✅ Test cases received for game ${gameId}, count: ${Array.isArray(testsReady) ? testsReady.length : 'not array'}`);
         game.currentTestCases = testsReady;
+        console.log(`💾 Set game.currentTestCases for game ${gameId}`);
+        
+        // 🚀 TRIGGER PRELOADING: Queue up next round now that current round tests are ready
+        console.log('🔄 Cached tests received, triggering continuous pre-loading for next round...');
+        triggerContinuousPreloading(gameId, io);
       }
     );
     
@@ -573,24 +666,39 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
   // Fallback to live fetching if no pre-loaded problems
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🎲 Fetching random LeetCode problem for game ${gameId}... (Attempt ${attempt}/${maxRetries})`);
+      console.log(`🎲 Selecting curated LeetCode problem for game ${gameId}... (Attempt ${attempt}/${maxRetries})`);
       
-      // Step 1: Get random problem ID
-      const randomResponse = await fetch(`${LEETCODE_API_BASE_URL}/random`);
-      if (!randomResponse.ok) {
-        throw new Error(`LeetCode API random error: ${randomResponse.status}`);
+      // Initialize used problems tracking for this game if not exists
+      if (!usedProblemsPerGame.has(gameId)) {
+        usedProblemsPerGame.set(gameId, new Set());
       }
       
-      const randomProblem = await randomResponse.json();
-      const problemId = randomProblem.frontend_id; // Use frontend_id for LeetCode API
+      const usedProblems = usedProblemsPerGame.get(gameId);
       
-      console.log(`🎯 Got random problem - Internal ID: ${randomProblem.id}, LeetCode ID: ${problemId} - "${randomProblem.title}"`);
+      // Get available problems (not used in this game yet)
+      const availableProblems = CURATED_PROBLEMS.filter(id => !usedProblems.has(id));
       
-      // Check if it's a premium problem from the random response
-      if (randomProblem.isPaidOnly) {
-        console.log(`💰 Skipping premium problem: "${randomProblem.title}" - trying another...`);
-        continue; // Try again with a different problem
+      if (availableProblems.length === 0) {
+        console.log('⚠️ Warning: All curated problems have been used in this game. Resetting used problems list.');
+        usedProblems.clear();
+        availableProblems.push(...CURATED_PROBLEMS);
       }
+      
+      // Step 1: Select random problem from curated list
+      const randomIndex = Math.floor(Math.random() * availableProblems.length);
+      const problemId = availableProblems[randomIndex];
+      
+      console.log(`🎯 Selected curated problem ID: ${problemId}`);
+      
+      // Mark this problem as used in this game
+      usedProblems.add(problemId);
+      console.log(`📝 Marked problem ${problemId} as used for game ${gameId}`);
+      console.log(`📊 Used problems in this game: [${Array.from(usedProblems).join(', ')}]`);
+      
+      // Comment out the old random API calls
+      // const randomResponse = await fetch(`${LEETCODE_API_BASE_URL}/random`);
+      // const randomProblem = await randomResponse.json();
+      // const problemId = randomProblem.frontend_id;
       
       // Step 2: Get full problem details using the frontend_id (LeetCode ID)
       console.log(`🔍 Fetching problem details for LeetCode ID: ${problemId}`);
@@ -649,19 +757,12 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
             gamePhase: game.phase
           });
           
-          // Send solution immediately to bug introducer
-          const bugIntroducer = game.players.find(p => p.role === 'bug_introducer');
-          console.log('🔍 Found bug introducer:', bugIntroducer);
-          
-          if (bugIntroducer) {
-            console.log('📤 Emitting solution_ready to:', bugIntroducer.socketId);
-            io.to(bugIntroducer.socketId).emit('solution_ready', { solution: solutionReady });
+          // Send solution immediately to bug introducer using currentBugIntroducer ID
+          if (game.currentBugIntroducer) {
+            console.log('📤 Emitting solution_ready to bug introducer:', game.currentBugIntroducer);
+            io.to(game.currentBugIntroducer).emit('solution_ready', { solution: solutionReady });
           } else {
-            console.log('❌ Bug introducer not found! Trying currentBugIntroducer...');
-            if (game.currentBugIntroducer) {
-              console.log('📤 Emitting solution_ready to currentBugIntroducer:', game.currentBugIntroducer);
-              io.to(game.currentBugIntroducer).emit('solution_ready', { solution: solutionReady });
-            }
+            console.log('❌ No currentBugIntroducer found in game state!');
           }
           // Clear loading overlay as soon as solution is ready
           io.to(gameId).emit('round_ready');
@@ -671,14 +772,14 @@ async function fetchAndSendProblem(gameId, io, maxRetries = 5) {
           console.log('⚡ Tests ready, storing for game...');
           // Store tests immediately when ready (background process)
           game.currentTestCases = testsReady;
+          
+          // 🚀 TRIGGER PRELOADING: Queue up next round now that current round tests are ready
+          console.log('🔄 Tests received, triggering continuous pre-loading for next round...');
+          triggerContinuousPreloading(gameId, io);
         }
       );
       
       console.log(`✅ Streaming generation completed for: "${problem.title}" (${problem.difficulty})`);
-      
-      // 🚀 IMMEDIATE CONTINUOUS PRE-LOADING: Queue up next round as soon as streaming completes
-      console.log('🔄 Streaming completed, immediately triggering continuous pre-loading for next round...');
-      triggerContinuousPreloading(gameId, io);
       
       // Store solution in game state (problem already stored above)
       game.currentSolution = solution;
@@ -830,6 +931,10 @@ class GameSession {
       });
       
       games.delete(this.id);
+      
+      // Clean up used problems tracking for this game
+      usedProblemsPerGame.delete(this.id);
+      console.log(`🧽 Cleaned up used problems tracking for game ${this.id}`);
     } else {
       // Start next round
       setTimeout(() => {
@@ -943,9 +1048,6 @@ function initializeSocket(io) {
           console.log(`Game ${gameId} is full, starting game...`);
           game.startRound();
           
-          // Start pre-loading problems for future rounds
-          preloadProblemsForGame(gameId, 2);
-          
           io.to(gameId).emit('game_started', {
             currentRound: game.currentRound,
             maxRounds: game.maxRounds,
@@ -957,6 +1059,12 @@ function initializeSocket(io) {
           
           // Auto-fetch a fresh problem for the new round
           fetchAndSendProblem(gameId, io);
+          
+          // Start initial preloading for future rounds
+          console.log(`🚀 Starting initial preloading for game ${gameId}`);
+          setTimeout(() => {
+            triggerContinuousPreloading(gameId, io);
+          }, 1000); // Small delay to let the first problem fetch start
         }
       } else {
         console.log(`Failed to add player ${playerName} to game ${gameId} - game is full`);
@@ -1068,7 +1176,7 @@ function initializeSocket(io) {
     });
 
     // Handle bug fix submission
-    socket.on('submit_fix', ({ gameId, fixedCode, foundBugLine, debuggerEditedLines }) => {
+    socket.on('submit_fix', async ({ gameId, fixedCode, foundBugLine, debuggerEditedLines }) => {
       const game = games.get(gameId);
       if (!game || game.currentDebugger !== socket.id) return;
       
@@ -1085,37 +1193,145 @@ function initializeSocket(io) {
       game.clearTimer();
       console.log(`Timer stopped for game ${gameId} - fix submitted`);
 
-      // In MVP, we'll do basic validation
-      // Later this will use Judge0 API for actual code execution
-      const isCorrect = fixedCode.length > 0; // Simplified validation
-
-      let roundWinner;
-      if (isCorrect) {
-        // Award round win to debugger
-        const debuggerIndex = game.players.findIndex(p => p.id === socket.id);
-        const playerKey = debuggerIndex === 0 ? 'player1' : 'player2';
-        game.roundWins[playerKey] += 1;
-        roundWinner = game.players[debuggerIndex].name + ' (Debugger)';
-      } else {
-        // Award round win to bug introducer
-        const introducerIndex = game.players.findIndex(p => p.id === game.currentBugIntroducer);
-        const playerKey = introducerIndex === 0 ? 'player1' : 'player2';
-        game.roundWins[playerKey] += 1;
-        roundWinner = game.players[introducerIndex].name + ' (Bug Introducer)';
-      }
-
-      io.to(gameId).emit('round_complete', {
-        isCorrect,
-        fixedCode,
-        foundBugLine,
-        roundWins: game.roundWins,
-        currentRound: game.currentRound,
-        maxRounds: game.maxRounds,
-        roundWinner: roundWinner
+      // Set game phase to validation and notify clients
+      game.currentPhase = 'validation';
+      io.to(gameId).emit('validation_started', {
+        message: 'Running test cases against your fix...',
+        phase: 'validation'
       });
 
-      // Check if game is over or start next round
-      game.checkGameEnd(io);
+      try {
+        // Wait for test cases to be available
+        console.log(`🔍 Checking test cases for game ${gameId}:`);
+        console.log(`🔍 - game.currentTestCases exists: ${!!game.currentTestCases}`);
+        console.log(`🔍 - game.currentTestCases length: ${game.currentTestCases ? game.currentTestCases.length : 'N/A'}`);
+        console.log(`🔍 - game.currentRound: ${game.currentRound}`);
+        console.log(`🔍 - game.currentPhase: ${game.currentPhase}`);
+        
+        if (!game.currentTestCases || game.currentTestCases.length === 0) {
+          console.log('⏳ Waiting for test cases to be generated...');
+          io.to(gameId).emit('validation_loading', {
+            message: 'Waiting for test cases to be ready...'
+          });
+          
+          // Wait up to 30 seconds for test cases
+          const maxWaitTime = 30000; // 30 seconds
+          const checkInterval = 1000; // 1 second
+          let waitTime = 0;
+          
+          while ((!game.currentTestCases || game.currentTestCases.length === 0) && waitTime < maxWaitTime) {
+            console.log(`⏳ Still waiting for test cases... (${waitTime/1000}s/${maxWaitTime/1000}s)`);
+            await new Promise(resolve => setTimeout(resolve, checkInterval));
+            waitTime += checkInterval;
+            console.log(`🔍 After wait - currentTestCases: ${game.currentTestCases ? game.currentTestCases.length : 'still null'}`);
+          }
+          
+          if (!game.currentTestCases || game.currentTestCases.length === 0) {
+            throw new Error('Test cases not available after waiting');
+          }
+        }
+
+        console.log(`🧪 Running Judge0 validation with ${game.currentTestCases.length} test cases`);
+        io.to(gameId).emit('validation_loading', {
+          message: `Running ${game.currentTestCases.length} test cases...`
+        });
+
+        // Use Judge0 to validate the fix
+        const judge0Service = require('../services/judge0Service');
+        const testResults = await judge0Service.runTestCases(
+          fixedCode,
+          game.currentTestCases,
+          'python' // Default to Python for now
+        );
+
+        const isCorrect = testResults.success;
+        console.log(`✅ Judge0 validation complete: ${testResults.summary}`);
+
+        let roundWinner;
+        if (isCorrect) {
+          // Award round win to debugger
+          const debuggerIndex = game.players.findIndex(p => p.id === socket.id);
+          const playerKey = debuggerIndex === 0 ? 'player1' : 'player2';
+          game.roundWins[playerKey] += 1;
+          roundWinner = game.players[debuggerIndex].name + ' (Debugger)';
+        } else {
+          // Award round win to bug introducer
+          const introducerIndex = game.players.findIndex(p => p.id === game.currentBugIntroducer);
+          const playerKey = introducerIndex === 0 ? 'player1' : 'player2';
+          game.roundWins[playerKey] += 1;
+          roundWinner = game.players[introducerIndex].name + ' (Bug Introducer)';
+        }
+
+        io.to(gameId).emit('round_complete', {
+          isCorrect,
+          fixedCode,
+          foundBugLine,
+          roundWins: game.roundWins,
+          currentRound: game.currentRound,
+          maxRounds: game.maxRounds,
+          roundWinner: roundWinner,
+          testResults: {
+            summary: testResults.summary,
+            passedCount: testResults.passedCount,
+            totalCount: testResults.totalCount,
+            details: testResults.results.map(r => ({
+              testCase: r.testCase,
+              passed: r.passed,
+              status: r.status,
+              error: r.error
+            }))
+          }
+        });
+
+        // Add 5-second delay before starting next round to let players review test results
+        console.log('⏱️ Waiting 5 seconds before next round...');
+        setTimeout(() => {
+          // Check if game is over or start next round
+          game.checkGameEnd(io);
+        }, 5000);
+
+      } catch (error) {
+        console.error('❌ Judge0 validation error:', error.message);
+        
+        // Fallback to simple validation if Judge0 fails
+        console.log('🔄 Falling back to simple validation...');
+        const isCorrect = fixedCode.length > 0 && fixedCode !== game.buggyCode;
+
+        let roundWinner;
+        if (isCorrect) {
+          const debuggerIndex = game.players.findIndex(p => p.id === socket.id);
+          const playerKey = debuggerIndex === 0 ? 'player1' : 'player2';
+          game.roundWins[playerKey] += 1;
+          roundWinner = game.players[debuggerIndex].name + ' (Debugger)';
+        } else {
+          const introducerIndex = game.players.findIndex(p => p.id === game.currentBugIntroducer);
+          const playerKey = introducerIndex === 0 ? 'player1' : 'player2';
+          game.roundWins[playerKey] += 1;
+          roundWinner = game.players[introducerIndex].name + ' (Bug Introducer)';
+        }
+
+        io.to(gameId).emit('round_complete', {
+          isCorrect,
+          fixedCode,
+          foundBugLine,
+          roundWins: game.roundWins,
+          currentRound: game.currentRound,
+          maxRounds: game.maxRounds,
+          roundWinner: roundWinner,
+          testResults: {
+            summary: 'Validation failed - using fallback',
+            passedCount: isCorrect ? 1 : 0,
+            totalCount: 1,
+            error: error.message
+          }
+        });
+
+        // Add 5-second delay before starting next round to let players review results
+        console.log('⏱️ Waiting 5 seconds before next round (fallback)...');
+        setTimeout(() => {
+          game.checkGameEnd(io);
+        }, 5000);
+      }
     });
 
     // Handle power-up usage
@@ -1179,6 +1395,10 @@ function initializeSocket(io) {
           // Clean up empty games
           if (game.players.length === 0) {
             games.delete(playerData.gameId);
+            
+            // Clean up used problems tracking for this game
+            usedProblemsPerGame.delete(playerData.gameId);
+            console.log(`🧽 Cleaned up used problems tracking for game ${playerData.gameId}`);
           }
         }
         players.delete(socket.id);

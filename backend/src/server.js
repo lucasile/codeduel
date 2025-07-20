@@ -5,6 +5,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const gameRoutes = require('./routes/gameRoutes');
+const judge0TestRoutes = require('./routes/judge0TestRoutes');
 const { initializeSocket } = require('./socket/gameSocket');
 
 const app = express();
@@ -22,6 +23,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/game', gameRoutes);
+app.use('/api/judge0', judge0TestRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
